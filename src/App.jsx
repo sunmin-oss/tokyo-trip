@@ -16,7 +16,8 @@ import {
   ExternalLink,
   Edit2,
   Save,
-  X
+  X,
+  Plus
 } from 'lucide-react';
 
 const TokyoTrip = () => {
@@ -24,6 +25,10 @@ const TokyoTrip = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isEditingEvent, setIsEditingEvent] = useState(null);
   const [editForm, setEditForm] = useState({});
+  const [isAddingDay, setIsAddingDay] = useState(false);
+  const [isAddingEvent, setIsAddingEvent] = useState(false);
+  const [newDayForm, setNewDayForm] = useState({ date: '', title: '', theme: 'bg-green-500' });
+  const [newEventForm, setNewEventForm] = useState({ time: '', title: '', desc: '', type: 'sight' });
 
   // 監聽滾動以改變導航欄樣式
   useEffect(() => {
@@ -209,6 +214,56 @@ const TokyoTrip = () => {
     }
   };
 
+  const addNewDay = () => {
+    const newDay = {
+      day: schedule.length + 1,
+      date: newDayForm.date,
+      title: newDayForm.title,
+      theme: newDayForm.theme,
+      events: []
+    };
+    setSchedule([...schedule, newDay]);
+    setActiveDay(newDay.day);
+    setIsAddingDay(false);
+    setNewDayForm({ date: '', title: '', theme: 'bg-green-500' });
+  };
+
+  const addNewEvent = () => {
+    const dayIdx = activeDay - 1;
+    const newEvent = {
+      time: newEventForm.time,
+      title: newEventForm.title,
+      desc: newEventForm.desc,
+      type: newEventForm.type,
+      icon: <MapPin className="w-5 h-5" />
+    };
+    const newSchedule = [...schedule];
+    newSchedule[dayIdx].events.push(newEvent);
+    setSchedule(newSchedule);
+    setIsAddingEvent(false);
+    setNewEventForm({ time: '', title: '', desc: '', type: 'sight' });
+  };
+
+  const themeOptions = [
+    { value: 'bg-blue-500', label: '藍色' },
+    { value: 'bg-red-500', label: '紅色' },
+    { value: 'bg-amber-500', label: '琥珀色' },
+    { value: 'bg-purple-500', label: '紫色' },
+    { value: 'bg-indigo-500', label: '靛色' },
+    { value: 'bg-teal-500', label: '青色' },
+    { value: 'bg-green-500', label: '綠色' },
+    { value: 'bg-pink-500', label: '粉紅色' }
+  ];
+
+  const typeOptions = [
+    { value: 'transport', label: '交通' },
+    { value: 'food', label: '食物' },
+    { value: 'shopping', label: '購物' },
+    { value: 'sight', label: '景點' },
+    { value: 'fun', label: '娛樂' },
+    { value: 'stay', label: '住宿' }
+  ];
+
   return (
     <div className="min-h-screen bg-slate-100 pb-10 font-sans text-slate-800">
       
@@ -233,24 +288,33 @@ const TokyoTrip = () => {
 
       {/* Sticky Navigation */}
       <div className={`sticky top-0 z-40 bg-white/95 backdrop-blur-md shadow-sm border-b border-slate-200 transition-all duration-300 ${isScrolled ? 'py-2' : 'py-4'}`}>
-        <div className="max-w-3xl mx-auto overflow-x-auto no-scrollbar px-4 flex space-x-3 snap-x">
-          {schedule.map((day) => (
-            <button
-              key={day.day}
-              onClick={() => {
-                setActiveDay(day.day);
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-              }}
-              className={`snap-center flex-shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition-all duration-200 border ${
-                activeDay === day.day 
-                  ? `${day.theme} text-white border-transparent shadow-lg scale-105` 
-                  : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'
-              }`}
-            >
-              <span className="block text-xs opacity-80 font-medium">Day {day.day}</span>
-              <span>{day.date.split(' ')[0]}</span>
-            </button>
-          ))}
+        <div className="max-w-3xl mx-auto px-4 flex items-center justify-between gap-3">
+          <div className="overflow-x-auto no-scrollbar flex space-x-3 snap-x flex-1">
+            {schedule.map((day) => (
+              <button
+                key={day.day}
+                onClick={() => {
+                  setActiveDay(day.day);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                className={`snap-center flex-shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition-all duration-200 border ${
+                  activeDay === day.day 
+                    ? `${day.theme} text-white border-transparent shadow-lg scale-105` 
+                    : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'
+                }`}
+              >
+                <span className="block text-xs opacity-80 font-medium">Day {day.day}</span>
+                <span>{day.date.split(' ')[0]}</span>
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => setIsAddingDay(true)}
+            className="flex-shrink-0 p-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors"
+            title="新增日程"
+          >
+            <Plus className="w-5 h-5" />
+          </button>
         </div>
       </div>
 
@@ -258,11 +322,21 @@ const TokyoTrip = () => {
       <div className="max-w-2xl mx-auto px-4 mt-6">
         
         {/* Day Header */}
-        <div className="mb-8 text-center animate-fade-in">
-          <h2 className="text-2xl font-bold text-slate-900">{currentDayData.date}</h2>
-          <p className={`inline-block mt-2 px-4 py-1 rounded-full text-white text-sm font-medium ${currentDayData.theme}`}>
-            {currentDayData.title}
-          </p>
+        <div className="mb-8 flex items-center justify-between gap-4 animate-fade-in">
+          <div className="flex-1">
+            <h2 className="text-2xl font-bold text-slate-900">{currentDayData.date}</h2>
+            <p className={`inline-block mt-2 px-4 py-1 rounded-full text-white text-sm font-medium ${currentDayData.theme}`}>
+              {currentDayData.title}
+            </p>
+          </div>
+          <button
+            onClick={() => setIsAddingEvent(true)}
+            className="flex-shrink-0 p-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors flex items-center gap-2 font-semibold"
+            title="新增事件"
+          >
+            <Plus className="w-5 h-5" />
+            <span className="hidden sm:inline">新增事件</span>
+          </button>
         </div>
 
         {/* Timeline */}
@@ -453,6 +527,157 @@ const TokyoTrip = () => {
                 >
                   <Save className="w-4 h-4" />
                   儲存
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add New Day Modal */}
+      {isAddingDay && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-fade-in">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold text-slate-800">新增日程</h3>
+              <button
+                onClick={() => setIsAddingDay(false)}
+                className="p-1 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-slate-400" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">日期</label>
+                <input
+                  type="text"
+                  value={newDayForm.date}
+                  onChange={(e) => setNewDayForm({ ...newDayForm, date: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                  placeholder="例：1/24 (六)"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">主題</label>
+                <input
+                  type="text"
+                  value={newDayForm.title}
+                  onChange={(e) => setNewDayForm({ ...newDayForm, title: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                  placeholder="例：自由探索"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">顏色</label>
+                <select
+                  value={newDayForm.theme}
+                  onChange={(e) => setNewDayForm({ ...newDayForm, theme: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                >
+                  {themeOptions.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setIsAddingDay(false)}
+                  className="flex-1 px-4 py-2 text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg font-semibold transition-colors"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={addNewDay}
+                  className="flex-1 px-4 py-2 text-white bg-green-500 hover:bg-green-600 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  新增
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add New Event Modal */}
+      {isAddingEvent && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-fade-in">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold text-slate-800">新增事件</h3>
+              <button
+                onClick={() => setIsAddingEvent(false)}
+                className="p-1 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-slate-400" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">時間</label>
+                <input
+                  type="text"
+                  value={newEventForm.time}
+                  onChange={(e) => setNewEventForm({ ...newEventForm, time: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="例：10:00"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">標題</label>
+                <input
+                  type="text"
+                  value={newEventForm.title}
+                  onChange={(e) => setNewEventForm({ ...newEventForm, title: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="活動標題"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">描述</label>
+                <textarea
+                  value={newEventForm.desc}
+                  onChange={(e) => setNewEventForm({ ...newEventForm, desc: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                  rows="3"
+                  placeholder="活動描述"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">類型</label>
+                <select
+                  value={newEventForm.type}
+                  onChange={(e) => setNewEventForm({ ...newEventForm, type: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {typeOptions.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setIsAddingEvent(false)}
+                  className="flex-1 px-4 py-2 text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg font-semibold transition-colors"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={addNewEvent}
+                  className="flex-1 px-4 py-2 text-white bg-blue-500 hover:bg-blue-600 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  新增
                 </button>
               </div>
             </div>
