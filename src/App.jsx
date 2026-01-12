@@ -29,7 +29,14 @@ const TokyoTrip = () => {
   const [editForm, setEditForm] = useState({});
   const [isAddingDay, setIsAddingDay] = useState(false);
   const [isAddingEvent, setIsAddingEvent] = useState(false);
-  const [newDayForm, setNewDayForm] = useState({ date: '', title: '', theme: 'bg-green-500' });
+  const [newDayForm, setNewDayForm] = useState({ 
+    date: '', 
+    title: '', 
+    theme: 'bg-green-500',
+    isSplit: false,
+    groupAName: 'A 組',
+    groupBName: 'B 組'
+  });
   const [supabaseReady, setSupabaseReady] = useState(false);
   const [newEventForm, setNewEventForm] = useState({ time: '', title: '', desc: '', type: 'sight' });
 
@@ -242,12 +249,27 @@ const TokyoTrip = () => {
       date: newDayForm.date,
       title: newDayForm.title,
       theme: newDayForm.theme,
-      events: []
+      isSplit: newDayForm.isSplit,
+      events: [],
+      splitEvents: newDayForm.isSplit ? [] : undefined
     };
+    
+    if (newDayForm.isSplit) {
+      newDay.groupAName = newDayForm.groupAName;
+      newDay.groupBName = newDayForm.groupBName;
+    }
+    
     setSchedule([...schedule, newDay]);
     setActiveDay(newDay.day);
     setIsAddingDay(false);
-    setNewDayForm({ date: '', title: '', theme: 'bg-green-500' });
+    setNewDayForm({ 
+      date: '', 
+      title: '', 
+      theme: 'bg-green-500',
+      isSplit: false,
+      groupAName: 'A 組',
+      groupBName: 'B 組'
+    });
   };
 
   const addNewEvent = () => {
@@ -617,6 +639,47 @@ const TokyoTrip = () => {
                   ))}
                 </select>
               </div>
+
+              <div className="border-t pt-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={newDayForm.isSplit}
+                    onChange={(e) => setNewDayForm({ 
+                      ...newDayForm, 
+                      isSplit: e.target.checked 
+                    })}
+                    className="w-4 h-4 accent-green-500"
+                  />
+                  <span className="text-sm font-semibold text-slate-700">分組行程 (如迪士尼 A/B 組)</span>
+                </label>
+              </div>
+
+              {newDayForm.isSplit && (
+                <>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">A 組名稱</label>
+                    <input
+                      type="text"
+                      value={newDayForm.groupAName}
+                      onChange={(e) => setNewDayForm({ ...newDayForm, groupAName: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500"
+                      placeholder="例：A 組"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">B 組名稱</label>
+                    <input
+                      type="text"
+                      value={newDayForm.groupBName}
+                      onChange={(e) => setNewDayForm({ ...newDayForm, groupBName: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500"
+                      placeholder="例：B 組"
+                    />
+                  </div>
+                </>
+              )}
 
               <div className="flex gap-3 mt-6">
                 <button
