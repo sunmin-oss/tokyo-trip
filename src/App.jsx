@@ -17,8 +17,10 @@ import {
   Edit2,
   Save,
   X,
-  Plus
+  Plus,
+  Database
 } from 'lucide-react';
+import { isSupabaseConfigured } from './supabaseClient';
 
 const TokyoTrip = () => {
   const [activeDay, setActiveDay] = useState(1);
@@ -28,6 +30,7 @@ const TokyoTrip = () => {
   const [isAddingDay, setIsAddingDay] = useState(false);
   const [isAddingEvent, setIsAddingEvent] = useState(false);
   const [newDayForm, setNewDayForm] = useState({ date: '', title: '', theme: 'bg-green-500' });
+  const [supabaseReady, setSupabaseReady] = useState(false);
   const [newEventForm, setNewEventForm] = useState({ time: '', title: '', desc: '', type: 'sight' });
 
   // 監聽滾動以改變導航欄樣式
@@ -36,6 +39,20 @@ const TokyoTrip = () => {
       setIsScrolled(window.scrollY > 50);
     };
     window.addEventListener('scroll', handleScroll);
+    
+    // 檢查 Supabase 是否配置
+    setSupabaseReady(isSupabaseConfigured());
+    
+    // 從本地存儲加載行程 (如果有的話)
+    const savedSchedule = localStorage.getItem('tokyoTripSchedule');
+    if (savedSchedule) {
+      try {
+        setSchedule(JSON.parse(savedSchedule));
+      } catch (e) {
+        console.error('加載本地行程失敗:', e);
+      }
+    }
+    
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
@@ -170,6 +187,11 @@ const TokyoTrip = () => {
 
   const [schedule, setSchedule] = useState(initialSchedule);
 
+  // 自動保存到本地存儲
+  useEffect(() => {
+    localStorage.setItem('tokyoTripSchedule', JSON.stringify(schedule));
+  }, [schedule]);
+
   const updateEventTime = (dayIndex, eventIndex, newTime) => {
     const newSchedule = [...schedule];
     newSchedule[dayIndex].events[eventIndex].time = newTime;
@@ -278,10 +300,22 @@ const TokyoTrip = () => {
         <div className="absolute bottom-0 left-0 p-6 text-white w-full">
           <p className="text-yellow-400 font-bold tracking-widest text-sm mb-2 uppercase">Tokyo Trip 2025</p>
           <h1 className="text-3xl md:text-5xl font-extrabold mb-2">東京六日究極之旅</h1>
-          <div className="flex items-center text-sm md:text-base text-slate-200">
+          <div className="flex items-center justify-between text-sm md:text-base text-slate-200">
             <span className="bg-slate-800/80 px-3 py-1 rounded-full backdrop-blur-sm border border-slate-700">
               1/18 (日) - 1/23 (五)
             </span>
+            {supabaseReady && (
+              <span className="bg-blue-500/80 px-3 py-1 rounded-full backdrop-blur-sm border border-blue-400 flex items-center gap-1">
+                <Database className="w-4 h-4" />
+                資料庫已連接
+              </span>
+            )}
+            {!supabaseReady && (
+              <span className="bg-slate-600/80 px-3 py-1 rounded-full backdrop-blur-sm border border-slate-500 flex items-center gap-1 text-xs">
+                <Database className="w-4 h-4" />
+                本地存儲
+              </span>
+            )}
           </div>
         </div>
       </div>
