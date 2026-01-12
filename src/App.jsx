@@ -18,13 +18,32 @@ import {
   Save,
   X,
   Plus,
-  Database
+  Database,
+  Trash2
 } from 'lucide-react';
 import { isSupabaseConfigured } from './supabaseClient';
 
 const TokyoTrip = () => {
   const [activeDay, setActiveDay] = useState(1);
   const [isScrolled, setIsScrolled] = useState(false);
+
+              {currentDayData?.isSplit && (
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">組別 (可選)</label>
+                  <select
+                    value={newEventForm.groupIndex ?? ''}
+                    onChange={(e) => setNewEventForm({ ...newEventForm, groupIndex: e.target.value === '' ? null : Number(e.target.value) })}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">不分組</option>
+                    {(currentDayData.groups || currentDayData.splitEvents || []).map((grp, idx) => {
+                      const value = grp.index ?? grp.groupIndex ?? idx;
+                      const label = grp.name ?? grp.groupName ?? `組別 ${idx + 1}`;
+                      return <option key={value} value={value}>{label}</option>;
+                    })}
+                  </select>
+                </div>
+              )}
   const [isEditingEvent, setIsEditingEvent] = useState(null);
   const [editForm, setEditForm] = useState({});
   const [isAddingDay, setIsAddingDay] = useState(false);
@@ -33,12 +52,11 @@ const TokyoTrip = () => {
     date: '', 
     title: '', 
     theme: 'bg-green-500',
-    isSplit: false,
-    groupAName: 'A 組',
-    groupBName: 'B 組'
+    groups: [],
+    isSplit: false
   });
   const [supabaseReady, setSupabaseReady] = useState(false);
-  const [newEventForm, setNewEventForm] = useState({ time: '', title: '', desc: '', type: 'sight' });
+  const [newEventForm, setNewEventForm] = useState({ time: '', title: '', desc: '', type: 'sight', groupIndex: null });
 
   // 監聽滾動以改變導航欄樣式
   useEffect(() => {
@@ -54,31 +72,6 @@ const TokyoTrip = () => {
     const savedSchedule = localStorage.getItem('tokyoTripSchedule');
     if (savedSchedule) {
       try {
-        setSchedule(JSON.parse(savedSchedule));
-      } catch (e) {
-        console.error('加載本地行程失敗:', e);
-      }
-    }
-    
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
-  const openMap = (location) => {
-    window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`, '_blank');
-  };
-
-  const initialSchedule = [
-    {
-      day: 1,
-      date: "1/18 (日)",
-      title: "抵達 & 宵夜採購",
-      theme: "bg-blue-500",
-      events: [
-        { time: "18:30", icon: <Plane className="w-5 h-5" />, title: "抵達成田機場 (NRT)", desc: "航班 CI108", type: "transport" },
-        { time: "19:30", icon: <Train className="w-5 h-5" />, title: "專車接送", desc: "機場 → 足立區民宿", type: "transport" },
-        { time: "21:00", icon: <MapPin className="w-5 h-5" />, title: "民宿 Check-in", desc: "地點：柳原2丁目", location: "柳原2丁目", type: "stay" },
-        { time: "21:30", icon: <Utensils className="w-5 h-5" />, title: "北海道拉麵 みそ熊", desc: "北千住 | 推薦：招牌味噌拉麵、炸雞塊 (麵量加大免費)", location: "北海道ラーメン みそ熊 北千住店", type: "food" },
-        { time: "22:30", icon: <ShoppingBag className="w-5 h-5" />, title: "唐吉訶德 北千住店", desc: "任務：買酒、零食 | 營業至凌晨 04:00", location: "唐吉訶德 北千住店", type: "shopping" },
       ]
     },
     {
@@ -249,14 +242,18 @@ const TokyoTrip = () => {
       date: newDayForm.date,
       title: newDayForm.title,
       theme: newDayForm.theme,
-      isSplit: newDayForm.isSplit,
+      isSplit: newDayForm.groups.length > 0,
       events: [],
-      splitEvents: newDayForm.isSplit ? [] : undefined
+      groups: newDayForm.groups
     };
     
-    if (newDayForm.isSplit) {
-      newDay.groupAName = newDayForm.groupAName;
-      newDay.groupBName = newDayForm.groupBName;
+    // 如果有分組，初始化 splitEvents
+    if (newDay.isSplit) {
+      newDay.splitEvents = newDayForm.groups.map(group => ({
+        groupIndex: group.index,
+        groupName: group.name,
+        events: []
+      }));
     }
     
     setSchedule([...schedule, newDay]);
@@ -266,9 +263,34 @@ const TokyoTrip = () => {
       date: '', 
       title: '', 
       theme: 'bg-green-500',
-      isSplit: false,
-      groupAName: 'A 組',
-      groupBName: 'B 組'
+      groups: [],
+      isSplit: false
+    });
+  };
+
+  const addGroupInput = () => {
+    setNewDayForm(prev => ({
+      ...prev,
+      isSplit: true,
+      groups: [...prev.groups, { index: Date.now(), name: `組別${prev.groups.length + 1}` }]
+    }));
+  };
+
+  const updateGroupName = (index, name) => {
+    setNewDayForm(prev => ({
+      ...prev,
+      groups: prev.groups.map(g => g.index === index ? { ...g, name } : g)
+    }));
+  };
+
+  const removeGroupInput = (index) => {
+    setNewDayForm(prev => {
+      const groups = prev.groups.filter(g => g.index !== index);
+      return {
+        ...prev,
+        groups,
+        isSplit: groups.length > 0
+      };
     });
   };
 
@@ -282,10 +304,23 @@ const TokyoTrip = () => {
       icon: <MapPin className="w-5 h-5" />
     };
     const newSchedule = [...schedule];
-    newSchedule[dayIdx].events.push(newEvent);
+    const currentDay = newSchedule[dayIdx];
+    const canUseSplit = currentDay.isSplit && Array.isArray(currentDay.splitEvents) && currentDay.splitEvents.some(s => s.events);
+    
+    if (canUseSplit && newEventForm.groupIndex !== null) {
+      const splitEvent = currentDay.splitEvents.find(s => s.groupIndex === newEventForm.groupIndex);
+      if (splitEvent) {
+        splitEvent.events.push(newEvent);
+      } else {
+        currentDay.events.push(newEvent);
+      }
+    } else {
+      currentDay.events.push(newEvent);
+    }
+    
     setSchedule(newSchedule);
     setIsAddingEvent(false);
-    setNewEventForm({ time: '', title: '', desc: '', type: 'sight' });
+    setNewEventForm({ time: '', title: '', desc: '', type: 'sight', groupIndex: null });
   };
 
   const themeOptions = [
@@ -308,57 +343,98 @@ const TokyoTrip = () => {
     { value: 'stay', label: '住宿' }
   ];
 
+  // 刪除日程
+  const deleteDay = (dayToDelete) => {
+    const newSchedule = schedule
+      .filter(d => d.day !== dayToDelete)
+      .map((d, idx) => ({
+        ...d,
+        day: idx + 1
+      }));
+    setSchedule(newSchedule);
+    if (activeDay === dayToDelete) {
+      setActiveDay(Math.max(1, dayToDelete - 1));
+    }
+  };
+
+  // 刪除事件
+  const deleteEvent = (dayIdx, eventIdx, isSplit = false, groupIndex = null) => {
+    const newSchedule = [...schedule];
+    if (isSplit && groupIndex !== null) {
+      const splitEvent = newSchedule[dayIdx].splitEvents.find(s => s.groupIndex === groupIndex);
+      if (splitEvent) {
+        splitEvent.events.splice(eventIdx, 1);
+      }
+    } else {
+      newSchedule[dayIdx].events.splice(eventIdx, 1);
+    }
+    setSchedule(newSchedule);
+  };
+
   return (
     <div className="min-h-screen bg-slate-100 pb-10 font-sans text-slate-800">
       
       {/* Hero Header */}
       <div className="relative h-64 bg-slate-900 overflow-hidden">
         <img 
-          src="https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?q=80&w=2994&auto=format&fit=crop" 
-          alt="Tokyo" 
-          className="absolute inset-0 w-full h-full object-cover opacity-60"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-900 to-transparent"></div>
-        <div className="absolute bottom-0 left-0 p-6 text-white w-full">
-          <p className="text-yellow-400 font-bold tracking-widest text-sm mb-2 uppercase">Tokyo Trip 2025</p>
-          <h1 className="text-3xl md:text-5xl font-extrabold mb-2">東京六日究極之旅</h1>
-          <div className="flex items-center justify-between text-sm md:text-base text-slate-200">
-            <span className="bg-slate-800/80 px-3 py-1 rounded-full backdrop-blur-sm border border-slate-700">
-              1/18 (日) - 1/23 (五)
-            </span>
-            {supabaseReady && (
-              <span className="bg-blue-500/80 px-3 py-1 rounded-full backdrop-blur-sm border border-blue-400 flex items-center gap-1">
-                <Database className="w-4 h-4" />
-                資料庫已連接
-              </span>
-            )}
-            {!supabaseReady && (
-              <span className="bg-slate-600/80 px-3 py-1 rounded-full backdrop-blur-sm border border-slate-500 flex items-center gap-1 text-xs">
-                <Database className="w-4 h-4" />
-                本地存儲
-              </span>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Sticky Navigation */}
-      <div className={`sticky top-0 z-40 bg-white/95 backdrop-blur-md shadow-sm border-b border-slate-200 transition-all duration-300 ${isScrolled ? 'py-2' : 'py-4'}`}>
-        <div className="max-w-3xl mx-auto px-4 flex items-center justify-between gap-3">
           <div className="overflow-x-auto no-scrollbar flex space-x-3 snap-x flex-1">
             {schedule.map((day) => (
-              <button
-                key={day.day}
-                onClick={() => {
-                  setActiveDay(day.day);
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
-                className={`snap-center flex-shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition-all duration-200 border ${
-                  activeDay === day.day 
-                    ? `${day.theme} text-white border-transparent shadow-lg scale-105` 
-                    : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'
-                }`}
+              <div key={day.day} className="flex items-center space-x-1">
+                <button
+                  onClick={() => {
+                    setActiveDay(day.day);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className={`snap-center flex-shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition-all duration-200 border ${
+                    activeDay === day.day 
+                      ? `${day.theme} text-white border-transparent shadow-lg scale-105` 
+                      : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  <span className="block text-xs opacity-80 font-medium">Day {day.day}</span>
+                  <span>{day.date.split(' ')[0]}</span>
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    deleteDay(day.day);
+                  }}
+                  className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                  title="刪除此日程"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
+          </div>
               >
+                // 刪除日程
+                const deleteDay = (dayToDelete) => {
+                  const newSchedule = schedule
+                    .filter(d => d.day !== dayToDelete)
+                    .map((d, idx) => ({
+                      ...d,
+                      day: idx + 1
+                    }));
+                  setSchedule(newSchedule);
+                  if (activeDay === dayToDelete) {
+                    setActiveDay(Math.max(1, dayToDelete - 1));
+                  }
+                };
+
+                // 刪除事件
+                const deleteEvent = (dayIdx, eventIdx, isSplit = false, groupIndex = null) => {
+                  const newSchedule = [...schedule];
+                  if (isSplit && groupIndex !== null) {
+                    const splitEvent = newSchedule[dayIdx].splitEvents.find(s => s.groupIndex === groupIndex);
+                    if (splitEvent) {
+                      splitEvent.events.splice(eventIdx, 1);
+                    }
+                  } else {
+                    newSchedule[dayIdx].events.splice(eventIdx, 1);
+                  }
+                  setSchedule(newSchedule);
+                };
                 <span className="block text-xs opacity-80 font-medium">Day {day.day}</span>
                 <span>{day.date.split(' ')[0]}</span>
               </button>
@@ -444,6 +520,13 @@ const TokyoTrip = () => {
                     >
                       <Edit2 className="w-4 h-4" />
                     </button>
+                    <button
+                      onClick={() => deleteEvent(activeDay - 1, idx, false, null)}
+                      className="flex-shrink-0 ml-1 p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      title="刪除行程"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
               </div>
@@ -454,13 +537,18 @@ const TokyoTrip = () => {
           {currentDayData.isSplit && (
             <div className="space-y-4">
                {/* Split Header */}
-               <div className="grid grid-cols-2 gap-4 mb-6 sticky top-28 z-30">
-                  <div className="bg-pink-100 text-pink-800 p-2 rounded-lg text-center font-bold shadow-sm border-2 border-pink-200">
-                    A 組<br/><span className="text-xs font-normal">JOJO + 黑膠</span>
-                  </div>
-                  <div className="bg-sky-100 text-sky-800 p-2 rounded-lg text-center font-bold shadow-sm border-2 border-sky-200">
-                    B 組<br/><span className="text-xs font-normal">迪士尼</span>
-                  </div>
+               <div className={`grid ${currentDayData.groups?.length ? 'grid-cols-2 md:grid-cols-3' : 'grid-cols-2'} gap-4 mb-6 sticky top-28 z-30`}>
+                  {(currentDayData.groups && currentDayData.groups.length > 0 ? currentDayData.groups : [
+                    { name: 'A 組', index: 0 },
+                    { name: 'B 組', index: 1 }
+                  ]).map((grp, idx) => (
+                    <div
+                      key={grp.index ?? idx}
+                      className={`${idx % 2 === 0 ? 'bg-pink-100 text-pink-800 border-pink-200' : 'bg-sky-100 text-sky-800 border-sky-200'} p-2 rounded-lg text-center font-bold shadow-sm border-2`}
+                    >
+                      {grp.name || `組別 ${idx + 1}`}
+                    </div>
+                  ))}
                </div>
 
                {currentDayData.splitEvents.map((slot, idx) => (
@@ -497,6 +585,43 @@ const TokyoTrip = () => {
                     </div>
                  </div>
                ))}
+
+               {currentDayData.events && currentDayData.events.length > 0 && (
+                 <div className="mt-6 space-y-3">
+                   <div className="text-sm font-semibold text-slate-600">其他事件</div>
+                   {currentDayData.events.map((event, idx) => (
+                     <div key={idx} className="flex group">
+                       <div className="w-16 flex-shrink-0 flex flex-col items-center">
+                         <span className="text-sm font-bold text-slate-500 group-hover:text-slate-800 transition-colors">{event.time}</span>
+                       </div>
+                       <div className="flex-1 pb-4">
+                         <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex justify-between items-start">
+                           <div>
+                             <h4 className="font-bold text-slate-800">{event.title}</h4>
+                             <p className="text-sm text-slate-600 whitespace-pre-line">{event.desc}</p>
+                           </div>
+                           <div className="flex gap-2">
+                             <button
+                               onClick={() => openEditModal(activeDay - 1, idx, event)}
+                               className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg"
+                               title="編輯"
+                             >
+                               <Edit2 className="w-4 h-4" />
+                             </button>
+                             <button
+                               onClick={() => deleteEvent(activeDay - 1, idx, false, null)}
+                               className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                               title="刪除"
+                             >
+                               <Trash2 className="w-4 h-4" />
+                             </button>
+                           </div>
+                         </div>
+                       </div>
+                     </div>
+                   ))}
+                 </div>
+               )}
             </div>
           )}
 
@@ -640,46 +765,59 @@ const TokyoTrip = () => {
                 </select>
               </div>
 
-              <div className="border-t pt-4">
+              <div className="border-t pt-4 space-y-3">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={newDayForm.isSplit}
-                    onChange={(e) => setNewDayForm({ 
-                      ...newDayForm, 
-                      isSplit: e.target.checked 
-                    })}
+                    checked={newDayForm.isSplit || newDayForm.groups.length > 0}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setNewDayForm(prev => ({
+                          ...prev,
+                          isSplit: true,
+                          groups: prev.groups.length ? prev.groups : [
+                            { index: Date.now(), name: 'A 組' },
+                            { index: Date.now() + 1, name: 'B 組' }
+                          ]
+                        }));
+                      } else {
+                        setNewDayForm(prev => ({ ...prev, isSplit: false, groups: [] }));
+                      }
+                    }}
                     className="w-4 h-4 accent-green-500"
                   />
-                  <span className="text-sm font-semibold text-slate-700">分組行程 (如迪士尼 A/B 組)</span>
+                  <span className="text-sm font-semibold text-slate-700">分組行程（可自訂多組）</span>
                 </label>
+
+                {newDayForm.isSplit && (
+                  <div className="space-y-2">
+                    {newDayForm.groups.map((group) => (
+                      <div key={group.index} className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={group.name}
+                          onChange={(e) => updateGroupName(group.index, e.target.value)}
+                          className="flex-1 px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                          placeholder="組別名稱，例如：攝影組"
+                        />
+                        <button
+                          onClick={() => removeGroupInput(group.index)}
+                          className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          title="移除此組別"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      onClick={addGroupInput}
+                      className="w-full px-3 py-2 text-sm font-semibold text-green-700 bg-green-50 hover:bg-green-100 border border-green-200 rounded-lg transition-colors"
+                    >
+                      新增組別
+                    </button>
+                  </div>
+                )}
               </div>
-
-              {newDayForm.isSplit && (
-                <>
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-2">A 組名稱</label>
-                    <input
-                      type="text"
-                      value={newDayForm.groupAName}
-                      onChange={(e) => setNewDayForm({ ...newDayForm, groupAName: e.target.value })}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500"
-                      placeholder="例：A 組"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-2">B 組名稱</label>
-                    <input
-                      type="text"
-                      value={newDayForm.groupBName}
-                      onChange={(e) => setNewDayForm({ ...newDayForm, groupBName: e.target.value })}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500"
-                      placeholder="例：B 組"
-                    />
-                  </div>
-                </>
-              )}
 
               <div className="flex gap-3 mt-6">
                 <button
