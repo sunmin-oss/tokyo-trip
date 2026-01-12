@@ -13,12 +13,17 @@ import {
   Gamepad2, 
   Coffee,
   Users,
-  ExternalLink
+  ExternalLink,
+  Edit2,
+  Save,
+  X
 } from 'lucide-react';
 
 const TokyoTrip = () => {
   const [activeDay, setActiveDay] = useState(1);
   const [isScrolled, setIsScrolled] = useState(false);
+  const [isEditingEvent, setIsEditingEvent] = useState(null);
+  const [editForm, setEditForm] = useState({});
 
   // 監聽滾動以改變導航欄樣式
   useEffect(() => {
@@ -33,7 +38,7 @@ const TokyoTrip = () => {
     window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`, '_blank');
   };
 
-  const schedule = [
+  const initialSchedule = [
     {
       day: 1,
       date: "1/18 (日)",
@@ -158,7 +163,51 @@ const TokyoTrip = () => {
     },
   ];
 
+  const [schedule, setSchedule] = useState(initialSchedule);
+
+  const updateEventTime = (dayIndex, eventIndex, newTime) => {
+    const newSchedule = [...schedule];
+    newSchedule[dayIndex].events[eventIndex].time = newTime;
+    setSchedule(newSchedule);
+  };
+
+  const updateEventTitle = (dayIndex, eventIndex, newTitle) => {
+    const newSchedule = [...schedule];
+    newSchedule[dayIndex].events[eventIndex].title = newTitle;
+    setSchedule(newSchedule);
+  };
+
+  const updateEventDesc = (dayIndex, eventIndex, newDesc) => {
+    const newSchedule = [...schedule];
+    newSchedule[dayIndex].events[eventIndex].desc = newDesc;
+    setSchedule(newSchedule);
+  };
+
   const currentDayData = schedule.find(d => d.day === activeDay);
+
+  const openEditModal = (dayIdx, eventIdx, event) => {
+    setIsEditingEvent({ dayIdx, eventIdx });
+    setEditForm({
+      time: event.time,
+      title: event.title,
+      desc: event.desc
+    });
+  };
+
+  const closeEditModal = () => {
+    setIsEditingEvent(null);
+    setEditForm({});
+  };
+
+  const saveEdit = () => {
+    if (isEditingEvent) {
+      const { dayIdx, eventIdx } = isEditingEvent;
+      updateEventTime(dayIdx, eventIdx, editForm.time);
+      updateEventTitle(dayIdx, eventIdx, editForm.title);
+      updateEventDesc(dayIdx, eventIdx, editForm.desc);
+      closeEditModal();
+    }
+  };
 
   return (
     <div className="min-h-screen bg-slate-100 pb-10 font-sans text-slate-800">
@@ -258,6 +307,13 @@ const TokyoTrip = () => {
                         )}
                       </div>
                     </div>
+                    <button
+                      onClick={() => openEditModal(activeDay - 1, idx, event)}
+                      className="flex-shrink-0 ml-2 p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                      title="編輯行程"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
               </div>
@@ -335,6 +391,74 @@ const TokyoTrip = () => {
            Have a nice trip! ✈️
         </p>
       </div>
+
+      {/* Edit Modal */}
+      {isEditingEvent && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-fade-in">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold text-slate-800">編輯行程</h3>
+              <button
+                onClick={closeEditModal}
+                className="p-1 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-slate-400" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">時間</label>
+                <input
+                  type="text"
+                  value={editForm.time}
+                  onChange={(e) => setEditForm({ ...editForm, time: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="例：18:30"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">標題</label>
+                <input
+                  type="text"
+                  value={editForm.title}
+                  onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="活動標題"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">描述</label>
+                <textarea
+                  value={editForm.desc}
+                  onChange={(e) => setEditForm({ ...editForm, desc: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                  rows="4"
+                  placeholder="活動描述"
+                />
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={closeEditModal}
+                  className="flex-1 px-4 py-2 text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg font-semibold transition-colors"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={saveEdit}
+                  className="flex-1 px-4 py-2 text-white bg-blue-500 hover:bg-blue-600 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
+                >
+                  <Save className="w-4 h-4" />
+                  儲存
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style jsx global>{`
         .no-scrollbar::-webkit-scrollbar {
