@@ -74,11 +74,11 @@ const TokyoTrip = () => {
       title: "抵達 & 宵夜採購",
       theme: "bg-blue-500",
       events: [
-        { time: "18:30", icon: <Plane className="w-5 h-5" />, title: "抵達成田機場 (NRT)", desc: "航班 CI108", type: "transport" },
-        { time: "19:30", icon: <Train className="w-5 h-5" />, title: "專車接送", desc: "機場 → 足立區民宿", type: "transport" },
-        { time: "21:00", icon: <MapPin className="w-5 h-5" />, title: "民宿 Check-in", desc: "地點：柳原2丁目", location: "柳原2丁目", type: "stay" },
-        { time: "21:30", icon: <Utensils className="w-5 h-5" />, title: "北海道拉麵 みそ熊", desc: "北千住 | 推薦：招牌味噌拉麵、炸雞塊 (麵量加大免費)", location: "北海道ラーメン みそ熊 北千住店", type: "food" },
-        { time: "22:30", icon: <ShoppingBag className="w-5 h-5" />, title: "唐吉訶德 北千住店", desc: "任務：買酒、零食 | 營業至凌晨 04:00", location: "唐吉訶德 北千住店", type: "shopping" },
+        { time: "18:30", title: "抵達成田機場 (NRT)", desc: "航班 CI108", type: "transport" },
+        { time: "19:30", title: "專車接送", desc: "機場 → 足立區民宿", type: "transport" },
+        { time: "21:00", title: "民宿 Check-in", desc: "地點：柳原2丁目", location: "柳原2丁目", type: "stay" },
+        { time: "21:30", title: "北海道拉麵 みそ熊", desc: "北千住 | 推薦：招牌味噌拉麵、炸雞塊 (麵量加大免費)", location: "北海道ラーメン みそ熊 北千住店", type: "food" },
+        { time: "22:30", title: "唐吉訶德 北千住店", desc: "任務：買酒、零食 | 營業至凌晨 04:00", location: "唐吉訶德 北千住店", type: "shopping" },
       ]
     },
     {
@@ -87,13 +87,13 @@ const TokyoTrip = () => {
       title: "購物、電玩與居酒屋",
       theme: "bg-red-500",
       events: [
-        { time: "09:00", icon: <MapPin className="w-5 h-5" />, title: "小網神社", desc: "強運除厄 | 人形町", location: "小網神社", type: "sight" },
-        { time: "10:30", icon: <Gamepad2 className="w-5 h-5" />, title: "秋葉原", desc: "動漫聖地巡禮", location: "秋葉原", type: "fun" },
-        { time: "12:30", icon: <Utensils className="w-5 h-5" />, title: "秋葉原午餐 (二選一)", desc: "A: 炸牛排 壱弐参 (自烤炸牛排)\nB: Roast Beef Ohno (和牛丼)", location: "秋葉原", type: "food" },
-        { time: "14:00", icon: <Gamepad2 className="w-5 h-5" />, title: "秋葉原 自由探索", desc: "繼續敗家", location: "秋葉原", type: "fun" },
-        { time: "16:00", icon: <ShoppingBag className="w-5 h-5" />, title: "Yodobashi Camera (7F)", desc: "GU & Uniqlo 買衣服", location: "Yodobashi Camera Akiba", type: "shopping" },
-        { time: "20:30", icon: <Utensils className="w-5 h-5" />, title: "元氣七輪燒肉 牛繁", desc: "北千住 | 17:00-23:00", location: "牛繁 北千住店", type: "food" },
-        { time: "22:30", icon: <Users className="w-5 h-5" />, title: "續攤 (二選一)", desc: "A: 鳥貴族 (均一價燒鳥)\nB: 磯丸水產 (24H 自烤海鮮)", location: "北千住", type: "food" },
+        { time: "09:00", title: "小網神社", desc: "強運除厄 | 人形町", location: "小網神社", type: "sight" },
+        { time: "10:30", title: "秋葉原", desc: "動漫聖地巡禮", location: "秋葉原", type: "fun" },
+        { time: "12:30", title: "秋葉原午餐 (二選一)", desc: "A: 炸牛排 壱弐参 (自烤炸牛排)\nB: Roast Beef Ohno (和牛丼)", location: "秋葉原", type: "food" },
+        { time: "14:00", title: "秋葉原 自由探索", desc: "繼續敗家", location: "秋葉原", type: "fun" },
+        { time: "16:00", title: "Yodobashi Camera (7F)", desc: "GU & Uniqlo 買衣服", location: "Yodobashi Camera Akiba", type: "shopping" },
+        { time: "20:30", title: "元氣七輪燒肉 牛繁", desc: "北千住 | 17:00-23:00", location: "牛繁 北千住店", type: "food" },
+        { time: "22:30", title: "續攤 (二選一)", desc: "A: 鳥貴族 (均一價燒鳥)\nB: 磯丸水產 (24H 自烤海鮮)", location: "北千住", type: "food" },
       ]
     },
     {
@@ -102,14 +102,14 @@ const TokyoTrip = () => {
       title: "淺草雷門 & 玩具模型",
       theme: "bg-amber-500",
       events: [
-        { time: "09:30", icon: <Camera className="w-5 h-5" />, title: "淺草寺 & 雷門", desc: "東京必去地標", location: "雷門", type: "sight" },
-        { time: "12:00", icon: <Utensils className="w-5 h-5" />, title: "淺草午餐 (二選一)", desc: "A: 淺草 炸牛排 (雷門對面)\nB: 大黑家 天婦羅 (百年老店)", location: "淺草", type: "food" },
-        { time: "13:30", icon: <Train className="w-5 h-5" />, title: "前往 東雲", desc: "搭乘百合海鷗號欣賞沿途風景", type: "transport" },
-        { time: "15:00", icon: <ShoppingBag className="w-5 h-5" />, title: "Ricoland Tokyo Bay", desc: "重機騎士聖地 | 東雲店", location: "Ricoland Tokyo Bay", type: "shopping" },
-        { time: "18:00", icon: <Train className="w-5 h-5" />, title: "前往 上野", desc: "", type: "transport" },
-        { time: "18:30", icon: <ShoppingBag className="w-5 h-5" />, title: "上野 購物行程", desc: "Yamashiroya (玩具專賣店)\n二木的菓子 (阿美橫丁伴手禮)", location: "Yamashiroya 上野", type: "shopping" },
-        { time: "20:00", icon: <Utensils className="w-5 h-5" />, title: "鴨 to 蔥", desc: "上野御徒町 | 備案：一蘭拉麵或居酒屋", location: "鴨to蔥", type: "food" },
-        { time: "22:00", icon: <Moon className="w-5 h-5" />, title: "回北千住休息", desc: "明天迪士尼組需早起，早點睡！", type: "stay" },
+        { time: "09:30", title: "淺草寺 & 雷門", desc: "東京必去地標", location: "雷門", type: "sight" },
+        { time: "12:00", title: "淺草午餐 (二選一)", desc: "A: 淺草 炸牛排 (雷門對面)\nB: 大黑家 天婦羅 (百年老店)", location: "淺草", type: "food" },
+        { time: "13:30", title: "前往 東雲", desc: "搭乘百合海鷗號欣賞沿途風景", type: "transport" },
+        { time: "15:00", title: "Ricoland Tokyo Bay", desc: "重機騎士聖地 | 東雲店", location: "Ricoland Tokyo Bay", type: "shopping" },
+        { time: "18:00", title: "前往 上野", desc: "", type: "transport" },
+        { time: "18:30", title: "上野 購物行程", desc: "Yamashiroya (玩具專賣店)\n二木的菓子 (阿美橫丁伴手禮)", location: "Yamashiroya 上野", type: "shopping" },
+        { time: "20:00", title: "鴨 to 蔥", desc: "上野御徒町 | 備案：一蘭拉麵或居酒屋", location: "鴨to蔥", type: "food" },
+        { time: "22:00", title: "回北千住休息", desc: "明天迪士尼組需早起，早點睡！", type: "stay" },
       ]
     },
     {
@@ -167,14 +167,14 @@ const TokyoTrip = () => {
       title: "澀谷潮流 & A5和牛",
       theme: "bg-indigo-500",
       events: [
-        { time: "11:00", icon: <Train className="w-5 h-5" />, title: "前往 澀谷", desc: "Shibuya", type: "transport" },
-        { time: "11:30", icon: <ShoppingBag className="w-5 h-5" />, title: "Parco 百貨 (6F)", desc: "任天堂、寶可夢、Jump Shop", location: "Shibuya Parco", type: "shopping" },
-        { time: "13:00", icon: <Utensils className="w-5 h-5" />, title: "午餐 (二選一)", desc: "挽肉與米 (需券) 或 美登利壽司", location: "澀谷", type: "food" },
-        { time: "14:30", icon: <Music className="w-5 h-5" />, title: "Tower Records 澀谷店", desc: "6F 尋寶", location: "Tower Records Shibuya", type: "shopping" },
-        { time: "16:00", icon: <Camera className="w-5 h-5" />, title: "宮下公園", desc: "MIYASHITA PARK", location: "MIYASHITA PARK", type: "sight" },
-        { time: "17:40", icon: <Camera className="w-5 h-5" />, title: "SHIBUYA SKY", desc: "絕美日落與夜景 (需預約)", location: "SHIBUYA SKY", type: "sight" },
-        { time: "19:45", icon: <Utensils className="w-5 h-5" />, title: "燒肉京城 北千住店", desc: "完美結尾：A5 和牛燒肉", location: "燒肉京城 北千住店", type: "food" },
-        { time: "22:30", icon: <Music className="w-5 h-5" />, title: "卡拉OK Big Echo", desc: "北千住店 | 歡唱最後一晚", location: "Big Echo 北千住", type: "fun" },
+        { time: "11:00", title: "前往 澀谷", desc: "Shibuya", type: "transport" },
+        { time: "11:30", title: "Parco 百貨 (6F)", desc: "任天堂、寶可夢、Jump Shop", location: "Shibuya Parco", type: "shopping" },
+        { time: "13:00", title: "午餐 (二選一)", desc: "挽肉與米 (需券) 或 美登利壽司", location: "澀谷", type: "food" },
+        { time: "14:30", title: "Tower Records 澀谷店", desc: "6F 尋寶", location: "Tower Records Shibuya", type: "shopping" },
+        { time: "16:00", title: "宮下公園", desc: "MIYASHITA PARK", location: "MIYASHITA PARK", type: "sight" },
+        { time: "17:40", title: "SHIBUYA SKY", desc: "絕美日落與夜景 (需預約)", location: "SHIBUYA SKY", type: "sight" },
+        { time: "19:45", title: "燒肉京城 北千住店", desc: "完美結尾：A5 和牛燒肉", location: "燒肉京城 北千住店", type: "food" },
+        { time: "22:30", title: "卡拉OK Big Echo", desc: "北千住店 | 歡唱最後一晚", location: "Big Echo 北千住", type: "fun" },
       ]
     },
     {
@@ -183,11 +183,11 @@ const TokyoTrip = () => {
       title: "輕鬆返台",
       theme: "bg-teal-500",
       events: [
-        { time: "10:00", icon: <MapPin className="w-5 h-5" />, title: "退房 & 上行李", desc: "檢查護照與隨身物品", type: "stay" },
-        { time: "11:00", icon: <Train className="w-5 h-5" />, title: "專車接送", desc: "民宿 → 羽田機場 (HND)", type: "transport" },
-        { time: "12:00", icon: <Plane className="w-5 h-5" />, title: "抵達機場", desc: "辦理登機手續", location: "羽田機場", type: "transport" },
-        { time: "12:30", icon: <Utensils className="w-5 h-5" />, title: "機場午餐", desc: "最後的美食", type: "food" },
-        { time: "14:15", icon: <Plane className="w-5 h-5" />, title: "起飛 (CI221)", desc: "返回溫暖的家", type: "transport" },
+        { time: "10:00", title: "退房 & 上行李", desc: "檢查護照與隨身物品", type: "stay" },
+        { time: "11:00", title: "專車接送", desc: "民宿 → 羽田機場 (HND)", type: "transport" },
+        { time: "12:00", title: "抵達機場", desc: "辦理登機手續", location: "羽田機場", type: "transport" },
+        { time: "12:30", title: "機場午餐", desc: "最後的美食", type: "food" },
+        { time: "14:15", title: "起飛 (CI221)", desc: "返回溫暖的家", type: "transport" },
       ]
     },
   ];
@@ -296,8 +296,7 @@ const TokyoTrip = () => {
       time: newEventForm.time,
       title: newEventForm.title,
       desc: newEventForm.desc,
-      type: newEventForm.type,
-      icon: <MapPin className="w-5 h-5" />
+      type: newEventForm.type
     };
     const newSchedule = [...schedule];
     newSchedule[dayIdx].events.push(newEvent);
@@ -325,6 +324,18 @@ const TokyoTrip = () => {
     { value: 'fun', label: '娛樂' },
     { value: 'stay', label: '住宿' }
   ];
+
+  const getIconForType = (type) => {
+    const iconMap = {
+      transport: <Train className="w-5 h-5" />,
+      food: <Utensils className="w-5 h-5" />,
+      shopping: <ShoppingBag className="w-5 h-5" />,
+      sight: <MapPin className="w-5 h-5" />,
+      fun: <Gamepad2 className="w-5 h-5" />,
+      stay: <Moon className="w-5 h-5" />
+    };
+    return iconMap[type] || <MapPin className="w-5 h-5" />;
+  };
 
   return (
     <div className="min-h-screen bg-slate-100 pb-10 font-sans text-slate-800">
@@ -442,13 +453,13 @@ const TokyoTrip = () => {
                 <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow duration-300 relative overflow-hidden">
                   {/* Decorative Icon Background */}
                   <div className="absolute -right-4 -bottom-4 text-slate-50 opacity-10 transform rotate-12 scale-150">
-                    {event.icon}
+                    {getIconForType(event.type)}
                   </div>
 
                   <div className="flex items-start justify-between relative z-10">
                     <div className="flex items-start space-x-3">
                       <div className={`p-2 rounded-lg ${currentDayData.theme} bg-opacity-10 text-${currentDayData.theme.split('-')[1]}-600`}>
-                        {event.icon}
+                        {getIconForType(event.type)}
                       </div>
                       <div>
                         <h3 className="font-bold text-lg text-slate-800 leading-tight">{event.title}</h3>
