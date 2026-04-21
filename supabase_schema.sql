@@ -64,10 +64,14 @@ CREATE TABLE IF NOT EXISTS events (
   group_id UUID REFERENCES groups(id) ON DELETE SET NULL, -- NULL 表示全員參加
   
   -- 排序和顯示
+  cost NUMERIC DEFAULT 0,
   order_index INTEGER DEFAULT 0,
   created_at TIMESTAMP DEFAULT now(),
   updated_at TIMESTAMP DEFAULT now()
 );
+
+-- 補 migration：如果 events 已存在但沒有 cost 欄位，補上欄位
+ALTER TABLE events ADD COLUMN IF NOT EXISTS cost NUMERIC DEFAULT 0;
 
 -- 6. Indexes for Performance
 CREATE INDEX IF NOT EXISTS idx_trips_user_id ON trips(user_id);
@@ -77,16 +81,104 @@ CREATE INDEX IF NOT EXISTS idx_events_day_id ON events(day_id);
 CREATE INDEX IF NOT EXISTS idx_events_group_id ON events(group_id);
 CREATE INDEX IF NOT EXISTS idx_events_trip_id ON events(trip_id);
 
--- 7. RLS (Row Level Security) - 如果需要
+-- 7. RLS (Row Level Security)
 -- 啟用 RLS
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE trips ENABLE ROW LEVEL SECURITY;
 ALTER TABLE groups ENABLE ROW LEVEL SECURITY;
 ALTER TABLE days ENABLE ROW LEVEL SECURITY;
 ALTER TABLE events ENABLE ROW LEVEL SECURITY;
 
--- Policies (假設所有使用者都可以讀寫，後續可細化)
--- CREATE POLICY "Enable read access for all users" ON trips
---   FOR SELECT USING (true);
--- CREATE POLICY "Enable insert for all users" ON trips
---   FOR INSERT WITH CHECK (true);
--- ... 更多 policies
+-- ========== users 表 ==========
+-- 使用者可以讀取自己的資料
+CREATE POLICY "users_select_own" ON users
+  FOR SELECT USING (auth.uid() = id);
+
+-- 使用者可以新增自己的資料（ensureUserExists 用）
+CREATE POLICY "users_insert_own" ON users
+  FOR INSERT WITH CHECK (auth.uid() = id);
+
+-- 使用者可以更新自己的資料
+CREATE POLICY "users_update_own" ON users
+  FOR UPDATE USING (auth.uid() = id);
+
+-- ========== trips 表 ==========
+-- 使用者只能讀取自己的行程
+CREATE POLICY "trips_select_own" ON trips
+  FOR SELECT USING (auth.uid() = user_id);
+
+-- 使用者可以建立行程（user_id 必須是自己）
+CREATE POLICY "trips_insert_own" ON trips
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+-- 使用者只能更新自己的行程
+CREATE POLICY "trips_update_own" ON trips
+  FOR UPDATE USING (auth.uid() = user_id);
+
+-- 使用者只能刪除自己的行程
+CREATE POLICY "trips_delete_own" ON trips
+  FOR DELETE USING (auth.uid() = user_id);
+
+-- ========== groups 表 ==========
+-- 透過 trip 的 user_id 驗證擁有權
+CREATE POLICY "groups_select_own" ON groups
+  FOR SELECT USING (
+    EXISTS (SELECT 1 FROM trips WHERE trips.id = groups.trip_id AND trips.user_id = auth.uid())
+  );
+
+CREATE POLICY "groups_insert_own" ON groups
+  FOR INSERT WITH CHECK (
+    EXISTS (SELECT 1 FROM trips WHERE trips.id = groups.trip_id AND trips.user_id = auth.uid())
+  );
+
+CREATE POLICY "groups_update_own" ON groups
+  FOR UPDATE USING (
+    EXISTS (SELECT 1 FROM trips WHERE trips.id = groups.trip_id AND trips.user_id = auth.uid())
+  );
+
+CREATE POLICY "groups_delete_own" ON groups
+  FOR DELETE USING (
+    EXISTS (SELECT 1 FROM trips WHERE trips.id = groups.trip_id AND trips.user_id = auth.uid())
+  );
+
+-- ========== days 表 ==========
+CREATE POLICY "days_select_own" ON days
+  FOR SELECT USING (
+    EXISTS (SELECT 1 FROM trips WHERE trips.id = days.trip_id AND trips.user_id = auth.uid())
+  );
+
+CREATE POLICY "days_insert_own" ON days
+  FOR INSERT WITH CHECK (
+    EXISTS (SELECT 1 FROM trips WHERE trips.id = days.trip_id AND trips.user_id = auth.uid())
+  );
+
+CREATE POLICY "days_update_own" ON days
+  FOR UPDATE USING (
+    EXISTS (SELECT 1 FROM trips WHERE trips.id = days.trip_id AND trips.user_id = auth.uid())
+  );
+
+CREATE POLICY "days_delete_own" ON days
+  FOR DELETE USING (
+    EXISTS (SELECT 1 FROM trips WHERE trips.id = days.trip_id AND trips.user_id = auth.uid())
+  );
+
+-- ========== events 表 ==========
+CREATE POLICY "events_select_own" ON events
+  FOR SELECT USING (
+    EXISTS (SELECT 1 FROM trips WHERE trips.id = events.trip_id AND trips.user_id = auth.uid())
+  );
+
+CREATE POLICY "events_insert_own" ON events
+  FOR INSERT WITH CHECK (
+    EXISTS (SELECT 1 FROM trips WHERE trips.id = events.trip_id AND trips.user_id = auth.uid())
+  );
+
+CREATE POLICY "events_update_own" ON events
+  FOR UPDATE USING (
+    EXISTS (SELECT 1 FROM trips WHERE trips.id = events.trip_id AND trips.user_id = auth.uid())
+  );
+
+CREATE POLICY "events_delete_own" ON events
+  FOR DELETE USING (
+    EXISTS (SELECT 1 FROM trips WHERE trips.id = events.trip_id AND trips.user_id = auth.uid())
+  );

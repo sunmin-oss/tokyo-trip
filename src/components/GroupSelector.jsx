@@ -188,7 +188,7 @@ export const GroupSelector = ({
 
         {/* 分組選項 */}
         {groups.map((group) => {
-          const colorClasses = require('../utils/dataTransform').getColorClasses(group.color);
+          const colorClasses = getColorClasses(group.color);
           const isSelected = selectedGroupId === group.id;
 
           return (

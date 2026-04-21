@@ -1,5 +1,6 @@
 import React from 'react';
-import { MapPin, ExternalLink, Edit2, Trash2 } from 'lucide-react';
+import { MapPin, ExternalLink, Edit2, Trash2, DollarSign } from 'lucide-react';
+import { formatConvertedAmount } from '../services/exchangeRate';
 import {
   getColorClasses,
   hasGroupedEvents,
@@ -19,7 +20,10 @@ export const EventTimelineGroup = ({
   groupCount,
   onEditEvent,
   onDeleteEvent,
-  openMap
+  openMap,
+  sym,
+  currency,
+  exchangeRates
 }) => {
   const hasAllGroups = hasAllGroupsEvents(timeEvent);
   const hasGrouped = hasGroupedEvents(timeEvent);
@@ -43,8 +47,11 @@ export const EventTimelineGroup = ({
                 event={event}
                 isAllGroups={true}
                 onEdit={() => onEditEvent(event)}
-                onDelete={() => onDeleteEvent(event.id)}
+                onDelete={() => onDeleteEvent(event)}
                 openMap={openMap}
+                sym={sym}
+                currency={currency}
+                exchangeRates={exchangeRates}
               />
             ))}
           </div>
@@ -73,8 +80,11 @@ export const EventTimelineGroup = ({
                     groupColor={groupColumn.color}
                     isGroupedEvent={true}
                     onEdit={() => onEditEvent(event)}
-                    onDelete={() => onDeleteEvent(event.id)}
+                    onDelete={() => onDeleteEvent(event)}
                     openMap={openMap}
+                    sym={sym}
+                    currency={currency}
+                    exchangeRates={exchangeRates}
                   />
                 ))}
               </div>
@@ -98,7 +108,10 @@ const EventCard = ({
   groupColor,
   onEdit,
   onDelete,
-  openMap
+  openMap,
+  sym,
+  currency,
+  exchangeRates
 }) => {
   const colorClasses = isGroupedEvent ? getColorClasses(groupColor) : {
     bg: 'bg-white',
@@ -130,6 +143,15 @@ const EventCard = ({
               <MapPin className="w-3 h-3" />
               查看地圖
             </button>
+          )}
+          {event.cost > 0 && (
+            <span className="inline-flex items-center gap-0.5 text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-1 rounded ml-1">
+              <DollarSign className="w-3 h-3" />
+              {sym}{event.cost.toLocaleString()}
+              {formatConvertedAmount(event.cost, currency, exchangeRates) && (
+                <span className="ml-1 text-slate-400 font-normal">{formatConvertedAmount(event.cost, currency, exchangeRates)}</span>
+              )}
+            </span>
           )}
         </div>
 
