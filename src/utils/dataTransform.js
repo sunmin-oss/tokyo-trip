@@ -68,7 +68,7 @@ export const organizeEventsByGroup = (events, groups) => {
  * 計算 CSS Grid 的欄數
  * 根據最大的分組數量自動計算
  */
-export const calculateGridColumns = (days, groups) => {
+export const calculateGridColumns = (days, _groups) => {
   let maxGroupsInDay = 0;
   
   days.forEach((day) => {
