@@ -1,6 +1,6 @@
 import React from 'react';
 import { MapPin, ExternalLink, Edit2, Trash2, DollarSign } from 'lucide-react';
-import { formatConvertedAmount } from '../services/exchangeRate';
+import { formatCost, formatBaseHint } from '../services/exchangeRate';
 import {
   getColorClasses,
   hasGroupedEvents,
@@ -17,11 +17,9 @@ import {
  */
 export const EventTimelineGroup = ({
   timeEvent,
-  groupCount,
   onEditEvent,
   onDeleteEvent,
   openMap,
-  sym,
   currency,
   exchangeRates
 }) => {
@@ -45,11 +43,9 @@ export const EventTimelineGroup = ({
               <EventCard
                 key={`all-${idx}`}
                 event={event}
-                isAllGroups={true}
                 onEdit={() => onEditEvent(event)}
                 onDelete={() => onDeleteEvent(event)}
                 openMap={openMap}
-                sym={sym}
                 currency={currency}
                 exchangeRates={exchangeRates}
               />
@@ -82,7 +78,6 @@ export const EventTimelineGroup = ({
                     onEdit={() => onEditEvent(event)}
                     onDelete={() => onDeleteEvent(event)}
                     openMap={openMap}
-                    sym={sym}
                     currency={currency}
                     exchangeRates={exchangeRates}
                   />
@@ -103,13 +98,11 @@ export const EventTimelineGroup = ({
  */
 const EventCard = ({
   event,
-  isAllGroups = false,
   isGroupedEvent = false,
   groupColor,
   onEdit,
   onDelete,
   openMap,
-  sym,
   currency,
   exchangeRates
 }) => {
@@ -147,9 +140,9 @@ const EventCard = ({
           {event.cost > 0 && (
             <span className="inline-flex items-center gap-0.5 text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-1 rounded ml-1">
               <DollarSign className="w-3 h-3" />
-              {sym}{event.cost.toLocaleString()}
-              {formatConvertedAmount(event.cost, currency, exchangeRates) && (
-                <span className="ml-1 text-slate-400 font-normal">{formatConvertedAmount(event.cost, currency, exchangeRates)}</span>
+              {formatCost(event.cost, currency, exchangeRates)}
+              {formatBaseHint(event.cost, currency) && (
+                <span className="ml-1 text-slate-400 font-normal">{formatBaseHint(event.cost, currency)}</span>
               )}
             </span>
           )}

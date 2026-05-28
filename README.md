@@ -1,45 +1,94 @@
-# Trip Planner
+# Trip Planner ✈️
 
-Trip Planner 是一套以旅遊情境為核心的行程管理系統，支援從規劃、地圖、預算到雲端同步的一站式流程。
+> React + Vite + Supabase 打造的一站式旅遊行程規劃 SPA。
+> 支援多行程管理、行程時間軸、互動地圖、多幣別預算追蹤、打包清單，以及雲端同步。
+
+---
+
+## 產品展示
+
+### 登入頁面
+支援 Email / Google 登入，或直接使用本地模式。
+
+![登入頁面](docs/screenshots/01-login.png)
+
+### 行程列表
+一目瞭然管理所有旅程，可從頭建立或一鍵套用範本。
+
+![行程列表](docs/screenshots/02-trip-list.png)
+
+### 行程時間軸
+依天/時段排列事件，支援拖曳排序、跨天移動、智慧分類。
+
+![行程時間軸](docs/screenshots/03-timeline.png)
+
+### 預算追蹤（多幣別換算）
+所有花費以 JPY 為基準儲存，可即時切換 TWD / USD / EUR / KRW 顯示。
+
+| JPY 顯示 | TWD 換算 |
+| :---: | :---: |
+| ![預算 JPY](docs/screenshots/04-budget-jpy.png) | ![預算 TWD](docs/screenshots/04-budget-twd.png) |
+
+### 地圖整合
+結合 Leaflet + OpenStreetMap，標記所有景點並顯示路線。
+
+![地圖](docs/screenshots/05-map.png)
+
+### 打包清單
+內建常用物品一鍵加入，勾選進度一覽無遺。
+
+![打包清單](docs/screenshots/06-packing.png)
+
+---
 
 ## 專案亮點
 
-- 多行程管理：可建立多筆旅行，快速切換不同旅程
-- 行程編排：支援 Day/Event 新增、編輯、刪除
-- 智慧分類：輸入關鍵字自動分類（食物、交通、購物等）
-- 地圖整合：顯示行程地點標記與路線
-- 預算追蹤：每日/分類花費統計
-- 即時匯率：顯示外幣金額與約略台幣換算
-- 打包清單：支援新增、勾選、刪除
-- 雲端同步：Supabase Auth + Postgres + RLS
+- **多行程管理**：可建立多筆旅行，快速切換不同旅程
+- **行程編排**：支援 Day / Event 新增、編輯、刪除、拖曳排序
+- **智慧分類**：輸入關鍵字自動分類（食物、交通、購物等）
+- **動態組別**：建立分組（如「美食組」），支援分組時間軸並排顯示
+- **地圖整合**：Leaflet + Nominatim 地理編碼，標記地點並顯示路線
+- **多幣別預算**：以 JPY 為基準，即時換算 TWD / USD / EUR / KRW（1 小時快取）
+- **打包清單**：新增、勾選、刪除，預設常用物品一鍵加入
+- **雲端同步**：Supabase Auth + Postgres + RLS（本地模式 fallback 至 localStorage）
+- **一鍵範本**：東京 / 首爾 / 大阪京都 範本行程秒速套用
 
 ## 技術棧
 
-- React 19
-- Vite
-- Tailwind CSS
-- Supabase (Auth, Database, RLS)
-- Leaflet / react-leaflet
-- dnd-kit
+| 類別 | 技術 |
+| --- | --- |
+| 前端框架 | React 19 + Vite 7 |
+| 樣式 | Tailwind CSS 4 |
+| 後端 / 資料庫 | Supabase（PostgreSQL + Auth + RLS）|
+| 地圖 | Leaflet + react-leaflet + OpenStreetMap Nominatim |
+| 拖曳排序 | @dnd-kit |
+| 匯率 API | open.er-api.com（1 小時 localStorage 快取）|
+| 部署 | GitHub Pages（`npm run deploy`）|
+| 語系 | zh-TW |
 
 ## 專案結構
 
 ```text
 src/
-	components/
-		AuthPage.jsx
-		TripList.jsx
-		TripDetail.jsx
-		TripMap.jsx
-		EventTimelineGroup.jsx
-		GroupSelector.jsx
-	hooks/
-		useAuth.js
-	services/
-		exchangeRate.js
-	utils/
-		dataTransform.js
-	supabaseClient.js
+  components/
+    AuthPage.jsx          # 登入 / 註冊
+    TripList.jsx           # 行程列表 + 範本
+    TripDetail.jsx         # 行程詳情（時間軸 + 事件 CRUD）
+    TripMap.jsx            # Leaflet 地圖
+    EventTimelineGroup.jsx # 分組時間軸
+    GroupSelector.jsx      # 組別管理
+    tabs/
+      BudgetTab.jsx        # 預算分頁（多幣別換算）
+      PackingTab.jsx       # 打包清單分頁
+  hooks/
+    useAuth.js             # Supabase Auth hook
+    useDebouncedEffect.js  # 防抖副作用 hook
+  services/
+    exchangeRate.js        # 匯率 API + formatCost
+    supabaseService.js     # Supabase CRUD 封裝
+  utils/
+    dataTransform.js       # 資料轉換工具
+  supabaseClient.js        # Supabase 初始化
 ```
 
 ## 快速開始
@@ -104,20 +153,20 @@ WHERE table_schema = 'public'
 	AND column_name = 'cost';
 ```
 
-## Demo 流程（給老師）
+## Demo 流程
 
-1. 登入並建立新行程
-2. 進入 Trip Detail，確認顯示雲端同步
-3. 新增 Day 與 Event（含地點、花費）
-4. 切換地圖、預算、打包清單頁面
-5. 回列表套用範本，再刷新頁面確認資料可回載
+1. 進入首頁，選擇登入或使用本地模式
+2. 建立新行程或套用範本（東京 / 首爾 / 大阪京都）
+3. 進入行程詳情，新增 Day 與 Event（含時間、地點、花費）
+4. 切換「地圖」分頁查看標記與路線
+5. 切換「預算」分頁，切換幣別查看即時換算
+6. 切換「打包清單」分頁，勾選已完成物品
+7. 回行程列表，刷新頁面確認資料可回載
 
-## 部署後 Smoke Test
+## 貢獻指南
 
-1. 可登入、可看到列表
-2. 新增行程成功，狀態為雲端同步
-3. 新增/編輯/刪除事件成功
-4. 地圖標記可顯示
+請參閱 [CONTRIBUTING.md](CONTRIBUTING.md)。
+所有 commit 須遵循 Conventional Commits 規範。
 5. 預算與匯率換算正常
 6. 重新整理後資料仍可從雲端回載
 

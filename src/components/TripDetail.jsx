@@ -1,12 +1,11 @@
-import React, { useState, useEffect, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
 import {
-  MapPin, Utensils, ShoppingBag, Train, Moon, Gamepad2, Coffee,
+  MapPin, Utensils, ShoppingBag, Train, Moon, Gamepad2,
   Users, Edit2, Save, X, Plus, Database, Trash2, ArrowLeft,
-  DollarSign, TrendingUp, ClipboardList, CheckSquare, Square, PackageCheck, Map, GripVertical
+  DollarSign, TrendingUp, ClipboardList, PackageCheck, Map, GripVertical
 } from 'lucide-react';
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors,
-  DragOverlay
 } from '@dnd-kit/core';
 import {
   SortableContext, verticalListSortingStrategy, useSortable, arrayMove
@@ -14,7 +13,13 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 const TripMap = lazy(() => import('./TripMap'));
 import { supabase, isSupabaseConfigured } from '../supabaseClient';
-import { fetchExchangeRates, formatConvertedAmount } from '../services/exchangeRate';
+import {
+  fetchExchangeRates,
+  formatCost,
+  formatBaseHint,
+  getCurrencySymbol,
+  BASE_CURRENCY,
+} from '../services/exchangeRate';
 import { EventTimelineGroup } from './EventTimelineGroup';
 import { GroupManagementPanel, GroupSelector } from './GroupSelector';
 import {
@@ -22,6 +27,9 @@ import {
   getColorClasses,
   getGridColsClass
 } from '../utils/dataTransform';
+import { useDebouncedEffect } from '../hooks/useDebouncedEffect';
+import BudgetTab from './tabs/BudgetTab';
+import PackingTab from './tabs/PackingTab';
 
 /**
  * TripDetail - 單一行程的詳細頁面（含 Supabase 同步）
@@ -125,13 +133,19 @@ const TripDetail = ({ trip, user, onBack }) => {
     }
   };
 
-  // 本地模式自動保存
-  useEffect(() => {
-    if (!isCloud && !loading) {
-      localStorage.setItem(`trip_${trip.id}`, JSON.stringify({ schedule, groups, packingItems, currency }));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [schedule, groups, packingItems, currency, loading]);
+  // 本地模式自動保存（debounce 500ms 降低 localStorage 寫入頻率）
+  useDebouncedEffect(
+    () => {
+      if (!isCloud && !loading) {
+        localStorage.setItem(
+          `trip_${trip.id}`,
+          JSON.stringify({ schedule, groups, packingItems, currency })
+        );
+      }
+    },
+    [schedule, groups, packingItems, currency, loading, isCloud, trip.id],
+    500
+  );
 
   // ==================== Supabase 同步 CRUD ====================
 
@@ -324,50 +338,28 @@ const TripDetail = ({ trip, user, onBack }) => {
     return groups.filter(g => groupIds.includes(g.id));
   };
 
-  // ==================== 預算計算 ====================
+  // ==================== 預算計算（皆以 BASE_CURRENCY = JPY 為基準）====================
 
-  const currencySymbols = { JPY: '¥', TWD: 'NT$', USD: '$', EUR: '€', KRW: '₩' };
-  const sym = currencySymbols[currency] || currency;
+  const sym = getCurrencySymbol(currency);
+  const baseSym = getCurrencySymbol(BASE_CURRENCY);
 
-  const getDayCost = (day) => (day.events || []).reduce((sum, e) => sum + (e.cost || 0), 0);
-  const getTripCost = () => schedule.reduce((sum, day) => sum + getDayCost(day), 0);
+  // 用普通物件而非 Map()，因為本檔已從 lucide-react 匯入名為 Map 的 icon，
+  // 會遮蔽全域的 Map constructor。
+  const dayCostMap = useMemo(() => {
+    const result = {};
+    schedule.forEach((day) => {
+      result[day.day] = (day.events || []).reduce((s, e) => s + (e.cost || 0), 0);
+    });
+    return result;
+  }, [schedule]);
 
-  const getCostByType = () => {
-    const map = {};
-    schedule.forEach(day => day.events?.forEach(e => {
-      if (e.cost > 0) map[e.type] = (map[e.type] || 0) + e.cost;
-    }));
-    return map;
-  };
+  const getDayCost = useCallback(
+    (day) => dayCostMap[day.day] || 0,
+    [dayCostMap]
+  );
 
-  // ==================== 打包清單 ====================
-
-  const defaultPackingItems = [
-    '護照', '身分證', '機票/電子票', '手機 & 充電線', '行動電源', '轉接頭',
-    '現金', '信用卡', '換洗衣物', '盥洗用品', '雨具', '藥品', 'Wi-Fi 分享器'
-  ];
-
-  const addPackingItem = (text) => {
-    if (!text.trim()) return;
-    setPackingItems(prev => [...prev, { id: Date.now(), text: text.trim(), checked: false }]);
-    setNewPackingItem('');
-  };
-
-  const togglePackingItem = (id) => {
-    setPackingItems(prev => prev.map(item => item.id === id ? { ...item, checked: !item.checked } : item));
-  };
-
-  const deletePackingItem = (id) => {
-    setPackingItems(prev => prev.filter(item => item.id !== id));
-  };
-
-  const addDefaultItems = () => {
-    const existingTexts = new Set(packingItems.map(i => i.text));
-    const newItems = defaultPackingItems
-      .filter(t => !existingTexts.has(t))
-      .map((text, i) => ({ id: Date.now() + i, text, checked: false }));
-    setPackingItems(prev => [...prev, ...newItems]);
-  };
+  // ==================== 打包清單 state（邏輯已搬至 PackingTab）====================
+  // 增刪邏輯由 PackingTab 自身處理，此處只保留 state 以便本地保存同步。
 
   const themeOptions = [
     { value: 'bg-blue-500', label: '藍色' }, { value: 'bg-red-500', label: '紅色' },
@@ -552,9 +544,9 @@ const TripDetail = ({ trip, user, onBack }) => {
                   )}
                   {event.cost > 0 && (
                     <span className="ml-2 mt-3 inline-flex items-center text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-1 rounded">
-                      <DollarSign className="w-3 h-3 mr-0.5" /> {sym}{event.cost.toLocaleString()}
-                      {formatConvertedAmount(event.cost, currency, exchangeRates) && (
-                        <span className="ml-1 text-slate-400 font-normal">{formatConvertedAmount(event.cost, currency, exchangeRates)}</span>
+                      <DollarSign className="w-3 h-3 mr-0.5" /> {formatCost(event.cost, currency, exchangeRates)}
+                      {formatBaseHint(event.cost, currency) && (
+                        <span className="ml-1 text-slate-400 font-normal">{formatBaseHint(event.cost, currency)}</span>
                       )}
                     </span>
                   )}
@@ -717,7 +709,7 @@ const TripDetail = ({ trip, user, onBack }) => {
                     </p>
                     {getDayCost(currentDayData) > 0 && (
                       <span className="ml-2 inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200">
-                        <DollarSign className="w-3.5 h-3.5" /> {sym}{getDayCost(currentDayData).toLocaleString()}
+                        <DollarSign className="w-3.5 h-3.5" /> {formatCost(getDayCost(currentDayData), currency, exchangeRates)}
                       </span>
                     )}
                     {dayHasGroups(currentDayData) && (
@@ -754,153 +746,22 @@ const TripDetail = ({ trip, user, onBack }) => {
 
         {/* ===== Tab: Budget ===== */}
         {activeTab === 'budget' && (
-          <div className="animate-fade-in space-y-6">
-            {/* Currency Selector */}
-            <div className="flex items-center gap-3">
-              <label className="text-sm font-semibold text-slate-700">幣別</label>
-              <select value={currency} onChange={(e) => setCurrency(e.target.value)}
-                className="px-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
-                <option value="JPY">¥ JPY 日圓</option>
-                <option value="TWD">NT$ TWD 台幣</option>
-                <option value="USD">$ USD 美元</option>
-                <option value="EUR">€ EUR 歐元</option>
-                <option value="KRW">₩ KRW 韓圓</option>
-              </select>
-            </div>
-
-            {/* Trip Total */}
-            <div className="bg-gradient-to-r from-emerald-500 to-teal-500 rounded-2xl p-6 text-white shadow-lg">
-              <p className="text-emerald-100 text-sm font-medium mb-1">全程總花費</p>
-              <p className="text-4xl font-extrabold">{sym}{getTripCost().toLocaleString()}</p>
-              {formatConvertedAmount(getTripCost(), currency, exchangeRates) && (
-                <p className="text-emerald-100 text-sm mt-1 font-medium">{formatConvertedAmount(getTripCost(), currency, exchangeRates)}</p>
-              )}
-              <p className="text-emerald-100 text-xs mt-2">{schedule.length} 天 · {schedule.reduce((s, d) => s + d.events.length, 0)} 個事件</p>
-            </div>
-
-            {/* Per Day */}
-            <div className="space-y-3">
-              <h3 className="text-lg font-bold text-slate-800">每日花費</h3>
-              {schedule.map(day => {
-                const cost = getDayCost(day);
-                const pct = getTripCost() > 0 ? (cost / getTripCost()) * 100 : 0;
-                return (
-                  <div key={day.day} className="bg-white rounded-xl p-4 border border-slate-200 shadow-sm">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <span className={`w-3 h-3 rounded-full ${day.theme}`} />
-                        <span className="font-semibold text-sm text-slate-800">Day {day.day} · {day.title}</span>
-                      </div>
-                      <div className="text-right">
-                        <span className="font-bold text-emerald-600">{sym}{cost.toLocaleString()}</span>
-                        {formatConvertedAmount(cost, currency, exchangeRates) && (
-                          <span className="block text-xs text-slate-400">{formatConvertedAmount(cost, currency, exchangeRates)}</span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="w-full bg-slate-100 rounded-full h-2">
-                      <div className={`h-2 rounded-full ${day.theme} transition-all`} style={{ width: `${pct}%` }} />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Per Type */}
-            {Object.keys(getCostByType()).length > 0 && (
-              <div className="space-y-3">
-                <h3 className="text-lg font-bold text-slate-800">分類花費</h3>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {Object.entries(getCostByType()).sort((a, b) => b[1] - a[1]).map(([type, cost]) => {
-                    const emojiMap = { transport: '🚃', food: '🍜', shopping: '🛍️', sight: '📍', fun: '🎮', stay: '🏠' };
-                    const nameMap = { transport: '交通', food: '食物', shopping: '購物', sight: '景點', fun: '娛樂', stay: '住宿' };
-                    return (
-                      <div key={type} className="bg-white rounded-xl p-4 border border-slate-200 shadow-sm text-center">
-                        <p className="text-2xl mb-1">{emojiMap[type] || '📦'}</p>
-                        <p className="text-xs text-slate-500 mb-1">{nameMap[type] || type}</p>
-                        <p className="font-bold text-slate-800">{sym}{cost.toLocaleString()}</p>
-                        {formatConvertedAmount(cost, currency, exchangeRates) && (
-                          <p className="text-xs text-slate-400 mt-0.5">{formatConvertedAmount(cost, currency, exchangeRates)}</p>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
+          <BudgetTab
+            schedule={schedule}
+            currency={currency}
+            onChangeCurrency={setCurrency}
+            exchangeRates={exchangeRates}
+          />
         )}
 
         {/* ===== Tab: Packing List ===== */}
         {activeTab === 'packing' && (
-          <div className="animate-fade-in space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                <PackageCheck className="w-5 h-5 text-amber-500" /> 打包清單
-              </h3>
-              <span className="text-sm text-slate-400">
-                {packingItems.filter(i => i.checked).length}/{packingItems.length} 已完成
-              </span>
-            </div>
-
-            {/* Progress */}
-            {packingItems.length > 0 && (
-              <div className="w-full bg-slate-100 rounded-full h-3">
-                <div className="h-3 rounded-full bg-amber-500 transition-all duration-500"
-                  style={{ width: `${packingItems.length > 0 ? (packingItems.filter(i => i.checked).length / packingItems.length) * 100 : 0}%` }} />
-              </div>
-            )}
-
-            {/* Add Item */}
-            <div className="flex gap-2">
-              <input type="text" value={newPackingItem}
-                onChange={(e) => setNewPackingItem(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && addPackingItem(newPackingItem)}
-                className="flex-1 px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm"
-                placeholder="新增打包物品..." />
-              <button onClick={() => addPackingItem(newPackingItem)}
-                className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-semibold text-sm transition-colors">
-                <Plus className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Quick Add Default */}
-            {packingItems.length === 0 && (
-              <button onClick={addDefaultItems}
-                className="w-full py-3 border-2 border-dashed border-slate-300 rounded-xl text-slate-500 hover:border-amber-400 hover:text-amber-600 transition-colors text-sm font-semibold">
-                一鍵加入常用物品（護照、充電線、藥品…）
-              </button>
-            )}
-
-            {/* Items List */}
-            <div className="space-y-2">
-              {packingItems.map(item => (
-                <div key={item.id}
-                  className={`flex items-center gap-3 bg-white rounded-xl px-4 py-3 border shadow-sm transition-all ${item.checked ? 'border-emerald-200 bg-emerald-50/50' : 'border-slate-200'}`}>
-                  <button onClick={() => togglePackingItem(item.id)} className="flex-shrink-0">
-                    {item.checked
-                      ? <CheckSquare className="w-5 h-5 text-emerald-500" />
-                      : <Square className="w-5 h-5 text-slate-300 hover:text-slate-500" />}
-                  </button>
-                  <span className={`flex-1 text-sm ${item.checked ? 'line-through text-slate-400' : 'text-slate-700'}`}>
-                    {item.text}
-                  </span>
-                  <button onClick={() => deletePackingItem(item.id)}
-                    className="p-1 text-slate-300 hover:text-red-500 transition-colors flex-shrink-0">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            {/* Add defaults button when list exists but some are missing */}
-            {packingItems.length > 0 && packingItems.length < defaultPackingItems.length && (
-              <button onClick={addDefaultItems}
-                className="text-sm text-amber-500 hover:text-amber-600 font-semibold transition-colors">
-                + 補充常用物品
-              </button>
-            )}
-          </div>
+          <PackingTab
+            packingItems={packingItems}
+            setPackingItems={setPackingItems}
+            newPackingItem={newPackingItem}
+            setNewPackingItem={setNewPackingItem}
+          />
         )}
       </div>
 
@@ -946,7 +807,7 @@ const TripDetail = ({ trip, user, onBack }) => {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1">花費 ({sym})</label>
+                <label className="block text-sm font-semibold text-slate-700 mb-1">花費 ({baseSym})</label>
                 <input type="number" min="0" step="1" value={editForm.cost} onChange={(e) => { const v = e.target.value; setEditForm(prev => ({ ...prev, cost: v })); }}
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0" />
               </div>
@@ -1061,7 +922,7 @@ const TripDetail = ({ trip, user, onBack }) => {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1">花費 ({sym})</label>
+                <label className="block text-sm font-semibold text-slate-700 mb-1">花費 ({baseSym})</label>
                 <input type="number" min="0" step="1" value={newEventForm.cost} onChange={(e) => { const v = e.target.value; setNewEventForm(prev => ({ ...prev, cost: v })); }}
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0" />
               </div>
