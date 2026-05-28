@@ -1,14 +1,14 @@
 /**
  * 即時匯率服務
- * 使用免費 API: frankfurter.dev (歐洲央行匯率資料)
- * 支援幣別: JPY, TWD, USD, EUR, KRW
+ * 使用免費 API: open.er-api.com (ExchangeRate-API 開放版)
+ * 支援幣別: JPY, TWD, USD, EUR, KRW（含 TWD/KRW，不需 API Key）
  */
 
 const CACHE_KEY = 'exchangeRates';
 const CACHE_DURATION = 60 * 60 * 1000; // 1 小時快取
 
-// 匯率 API (免費、無需 API Key)
-const API_BASE = 'https://api.frankfurter.dev/latest';
+// 匯率 API (免費、無需 API Key，支援 TWD/KRW)
+const API_BASE = 'https://open.er-api.com/v6/latest';
 
 /**
  * 從快取取得匯率資料
@@ -47,15 +47,20 @@ export const fetchExchangeRates = async () => {
 
   try {
     // 以 TWD 為基準取得匯率
-    const res = await fetch(`${API_BASE}?from=TWD&to=JPY,USD,EUR,KRW`);
+    const res = await fetch(`${API_BASE}/TWD`);
     if (!res.ok) throw new Error(`API error: ${res.status}`);
     const data = await res.json();
+    if (data.result && data.result !== 'success') {
+      throw new Error(`API result: ${data.result}`);
+    }
 
-    // data.rates = { JPY: X, USD: Y, ... } 表示 1 TWD = X JPY
-    // 我們需要反轉: 1 JPY = 1/X TWD
+    // data.rates = { JPY: X, USD: Y, ... } 表示 1 TWD = X 外幣
+    // 我們需要反轉: 1 外幣 = 1/X TWD
     const rates = { TWD: 1 };
-    for (const [cur, rate] of Object.entries(data.rates)) {
-      rates[cur] = rate > 0 ? 1 / rate : 0;
+    const wanted = ['JPY', 'USD', 'EUR', 'KRW'];
+    for (const cur of wanted) {
+      const rate = data.rates?.[cur];
+      rates[cur] = rate && rate > 0 ? 1 / rate : 0;
     }
 
     setCachedRates(rates);
@@ -102,4 +107,49 @@ export const formatConvertedAmount = (amount, from, rates) => {
   if (!amount || from === 'TWD' || !rates) return null;
   const converted = convertCurrency(amount, from, 'TWD', rates);
   return `≈ NT$${Math.round(converted).toLocaleString()}`;
+};
+
+// ====================================================================
+// 統一花費表示：所有事件 cost 一律以 JPY 為基準（BASE_CURRENCY）儲存。
+// 輸入表單一律以 JPY 收件；顯示時依使用者選擇的幣別換算。
+// 這樣切換預算幣別時才會「真的換算」而不是只換符號。
+// ====================================================================
+
+/** 系統內部儲存花費所使用的基準幣別 */
+export const BASE_CURRENCY = 'JPY';
+
+/** 幣別符號表 */
+export const CURRENCY_SYMBOLS = {
+  JPY: '¥',
+  TWD: 'NT$',
+  USD: '$',
+  EUR: '€',
+  KRW: '₩',
+};
+
+/**
+ * 取得幣別對應符號
+ */
+export const getCurrencySymbol = (code) => CURRENCY_SYMBOLS[code] || code;
+
+/**
+ * 將 BASE_CURRENCY 金額換算到目標幣別並格式化為顯示文字
+ * @param {number} amountInBase - 以 BASE_CURRENCY 表示的金額
+ * @param {string} displayCurrency - 顯示目標幣別
+ * @param {object} rates - 匯率表（每種幣別對 TWD）
+ * @returns {string} 例如 "¥3,500" 或 "NT$753"
+ */
+export const formatCost = (amountInBase, displayCurrency, rates) => {
+  const sym = getCurrencySymbol(displayCurrency);
+  const value = convertCurrency(amountInBase || 0, BASE_CURRENCY, displayCurrency, rates);
+  return `${sym}${Math.round(value).toLocaleString()}`;
+};
+
+/**
+ * 取得「次要顯示文字」：當顯示幣別不是 BASE_CURRENCY 時，回傳原始 base 金額的提示。
+ * 例如顯示 NT$753 時，回傳 "≈ ¥3,500"。
+ */
+export const formatBaseHint = (amountInBase, displayCurrency) => {
+  if (!amountInBase || displayCurrency === BASE_CURRENCY) return null;
+  return `≈ ${getCurrencySymbol(BASE_CURRENCY)}${Math.round(amountInBase).toLocaleString()}`;
 };
