@@ -3,39 +3,91 @@
  */
 
 /**
- * 將事件按照組別和時間分組
- * 用於"Swimlane"布局 - 同一時段的不同組別事件並排顯示
- * 
- * @param {Array} events - 原始事件陣列
- * @param {Array} groups - 所有組別陣列
- * @returns {Array} 轉換後的事件陣列
+ * 將事件按照時間範圍重疊分組
+ * 同一時段重疊的事件並排，當較短事件結束後，較長的接續往下
  */
 export const groupEventsByTimeAndGroup = (events, groups) => {
-  // 按時間分組
-  const timeGroups = {};
-  
-  events.forEach((event) => {
-    if (!timeGroups[event.time]) {
-      timeGroups[event.time] = [];
-    }
-    timeGroups[event.time].push(event);
+  if (!events || events.length === 0) return [];
+
+  // 檢查是否有任何事件設定了 endTime
+  const hasAnyEndTime = events.some(e => e.endTime);
+
+  if (!hasAnyEndTime) {
+    // 所有事件都沒有結束時間 → 用開始時間分組（向下相容）
+    return groupByStartTime(events, groups);
+  }
+
+  // 收集所有時間邊界
+  const boundaries = new Set();
+  events.forEach(e => {
+    if (e.time) boundaries.add(e.time);
+    if (e.endTime) boundaries.add(e.endTime);
   });
-  
-  // 轉換為陣列並排序
+
+  const sortedBounds = [...boundaries].sort();
+  if (sortedBounds.length === 0) return [];
+
+  const slots = [];
+  for (let i = 0; i < sortedBounds.length; i++) {
+    const time = sortedBounds[i];
+
+    // 找出在此時間點活躍的事件
+    const activeEvents = events.filter(e => {
+      const start = e.time || '';
+      const end = e.endTime || '';
+      if (!end) {
+        // 點事件：只在開始時間活躍
+        return start === time;
+      }
+      // 區間事件：start <= time < end
+      return start <= time && end > time;
+    });
+
+    if (activeEvents.length === 0) continue;
+
+    // 跟前一個 slot 比較，若活躍事件集合相同則跳過
+    const currKey = activeEvents.map(e => e._id || e.title).sort().join(',');
+    const prev = slots[slots.length - 1];
+    if (prev && prev._key === currKey) continue;
+
+    const allGroupsEvents = activeEvents.filter(e => !e.group_id);
+    const groupedEvents = activeEvents.filter(e => e.group_id);
+
+    slots.push({
+      time,
+      endTime: sortedBounds[i + 1] || null,
+      allGroupsEvents,
+      groupedEvents,
+      groupLayout: organizeEventsByGroup(groupedEvents, groups),
+      _key: currKey
+    });
+  }
+
+  return slots;
+};
+
+/** 純開始時間分組（向下相容無 endTime 的舊資料） */
+function groupByStartTime(events, groups) {
+  const timeGroups = {};
+  events.forEach(event => {
+    const t = event.time || '';
+    if (!timeGroups[t]) timeGroups[t] = [];
+    timeGroups[t].push(event);
+  });
   return Object.entries(timeGroups)
+    .sort(([a], [b]) => a.localeCompare(b))
     .map(([time, timeEvents]) => {
-      // 區分「全員事件」和「分組事件」
       const allGroupsEvents = timeEvents.filter(e => !e.group_id);
       const groupedEvents = timeEvents.filter(e => e.group_id);
-      
       return {
         time,
-        allGroupsEvents, // 全員參加的事件
-        groupedEvents,   // 分組事件，按 group_id 組織
+        endTime: null,
+        allGroupsEvents,
+        groupedEvents,
         groupLayout: organizeEventsByGroup(groupedEvents, groups)
       };
     });
-};
+}
 
 /**
  * 將分組事件按照組別組織，返回每個組別的事件列表

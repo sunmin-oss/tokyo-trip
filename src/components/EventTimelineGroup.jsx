@@ -1,19 +1,13 @@
 import React from 'react';
-import { MapPin, ExternalLink, Edit2, Trash2, DollarSign } from 'lucide-react';
+import { MapPin, Edit2, Trash2, DollarSign } from 'lucide-react';
 import { formatCost, formatBaseHint } from '../services/exchangeRate';
 import {
-  getColorClasses,
-  hasGroupedEvents,
-  hasAllGroupsEvents,
   getGridColsClass
 } from '../utils/dataTransform';
 
 /**
  * EventTimelineGroup 組件
- * 
- * 用於顯示「同一時段的事件」，支持：
- * 1. 全員事件（佔滿整行）
- * 2. 分組事件（並排顯示）
+ * 時間軸統一在左側，事件卡片在右側
  */
 export const EventTimelineGroup = ({
   timeEvent,
@@ -21,68 +15,58 @@ export const EventTimelineGroup = ({
   onDeleteEvent,
   openMap,
   currency,
-  exchangeRates
+  exchangeRates,
+  members
 }) => {
-  const hasAllGroups = hasAllGroupsEvents(timeEvent);
-  const hasGrouped = hasGroupedEvents(timeEvent);
-  
+  const events = timeEvent.allGroupsEvents || [];
+
   return (
-    <div className="relative">
-      {/* 時間標籤 */}
-      <div className="absolute left-1/2 -translate-x-1/2 -top-3 z-20">
-        <span className="bg-slate-800 text-white text-xs font-bold px-3 py-1 rounded-full shadow-sm">
+    <div className="flex">
+      {/* 左側時間軸 */}
+      <div className="w-16 flex-shrink-0 flex flex-col items-center pt-1">
+        <span className="text-sm font-bold text-slate-600 whitespace-nowrap">
           {timeEvent.time}
         </span>
+        <div className="w-0.5 bg-slate-200 flex-1 min-h-[24px] mt-1 relative">
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-white shadow-sm" />
+        </div>
+        {timeEvent.endTime && (
+          <span className="text-xs text-slate-400 font-medium mt-0.5">
+            {timeEvent.endTime}
+          </span>
+        )}
       </div>
 
-      <div className="pt-4 space-y-4">
-        {/* 全員事件區域 - 佔滿整行 */}
-        {hasAllGroups && (
-          <div className="col-span-full space-y-2">
-            {timeEvent.allGroupsEvents.map((event, idx) => (
+      {/* 右側事件內容 */}
+      <div className="flex-1 pb-2 space-y-3">
+        {events.length > 1 ? (
+          <div className={`grid ${getGridColsClass(events.length)} gap-3`}>
+            {events.map((event, idx) => (
               <EventCard
-                key={`all-${idx}`}
+                key={`evt-${idx}`}
                 event={event}
                 onEdit={() => onEditEvent(event)}
                 onDelete={() => onDeleteEvent(event)}
                 openMap={openMap}
                 currency={currency}
                 exchangeRates={exchangeRates}
+                members={members}
               />
             ))}
           </div>
-        )}
-
-        {/* 分組事件區域 - 按組別並排顯示 */}
-        {hasGrouped && (
-          <div className={`grid ${getGridColsClass(timeEvent.groupLayout.length)} gap-3`}>
-            {timeEvent.groupLayout.map((groupColumn) => (
-              <div key={groupColumn.groupId} className="space-y-2">
-                {/* 組別標籤 */}
-                <div className={`
-                  text-center text-xs font-bold px-2 py-1 rounded-lg
-                  ${getColorClasses(groupColumn.color).bg}
-                  ${getColorClasses(groupColumn.color).text}
-                  border-2 ${getColorClasses(groupColumn.color).border}
-                `}>
-                  {groupColumn.groupName}
-                </div>
-
-                {/* 該組別在此時段的事件 */}
-                {groupColumn.events.map((event, idx) => (
-                  <EventCard
-                    key={`${groupColumn.groupId}-${idx}`}
-                    event={event}
-                    groupColor={groupColumn.color}
-                    isGroupedEvent={true}
-                    onEdit={() => onEditEvent(event)}
-                    onDelete={() => onDeleteEvent(event)}
-                    openMap={openMap}
-                    currency={currency}
-                    exchangeRates={exchangeRates}
-                  />
-                ))}
-              </div>
+        ) : (
+          <div className="space-y-2">
+            {events.map((event, idx) => (
+              <EventCard
+                key={`evt-${idx}`}
+                event={event}
+                onEdit={() => onEditEvent(event)}
+                onDelete={() => onDeleteEvent(event)}
+                openMap={openMap}
+                currency={currency}
+                exchangeRates={exchangeRates}
+                members={members}
+              />
             ))}
           </div>
         )}
@@ -92,42 +76,31 @@ export const EventTimelineGroup = ({
 };
 
 /**
- * EventCard 組件
- * 
- * 單個事件的卡片展示
+ * EventCard 組件 - 單個事件的卡片展示
  */
 const EventCard = ({
   event,
-  isGroupedEvent = false,
-  groupColor,
   onEdit,
   onDelete,
   openMap,
   currency,
-  exchangeRates
+  exchangeRates,
+  members = []
 }) => {
-  const colorClasses = isGroupedEvent ? getColorClasses(groupColor) : {
-    bg: 'bg-white',
-    border: 'border-l-4 border-blue-400',
-    text: 'text-slate-800'
-  };
-
   return (
-    <div className={`
-      p-3 rounded-xl shadow-sm hover:shadow-md transition-all
-      ${colorClasses.bg}
-      ${isGroupedEvent ? `border-l-4 ${colorClasses.border}` : 'border border-slate-100'}
-    `}>
+    <div className="p-3 rounded-xl shadow-sm hover:shadow-md transition-all bg-white border border-slate-100">
       <div className="flex items-start justify-between">
         <div className="flex-1">
-          <h4 className={`font-bold text-sm mb-1 ${colorClasses.text}`}>
+          <h4 className="font-bold text-sm mb-1 text-slate-800">
             {event.title}
           </h4>
+          {event.endTime && (
+            <p className="text-xs text-slate-400 mb-1">⏱ {event.time} ~ {event.endTime}</p>
+          )}
           {event.description && (
             <p className="text-xs text-slate-500 mb-2">{event.description}</p>
           )}
           
-          {/* 位置按鈕 */}
           {event.location && (
             <button
               onClick={() => openMap(event.location)}
@@ -146,22 +119,27 @@ const EventCard = ({
               )}
             </span>
           )}
+          {event.assignees && event.assignees.length > 0 && members.length > 0 && (
+            <div className="mt-1.5 flex flex-wrap gap-1">
+              {event.assignees.map(mid => {
+                const m = members.find(mm => mm.id === mid);
+                return m ? (
+                  <span key={mid} className="inline-flex items-center text-xs font-medium text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded-full">
+                    {m.name}
+                  </span>
+                ) : null;
+              })}
+            </div>
+          )}
         </div>
 
-        {/* 操作按鈕 */}
         <div className="flex gap-1 ml-2">
-          <button
-            onClick={onEdit}
-            className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded transition-colors"
-            title="編輯"
-          >
+          <button onClick={onEdit}
+            className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded transition-colors" title="編輯">
             <Edit2 className="w-4 h-4" />
           </button>
-          <button
-            onClick={onDelete}
-            className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-            title="刪除"
-          >
+          <button onClick={onDelete}
+            className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors" title="刪除">
             <Trash2 className="w-4 h-4" />
           </button>
         </div>
