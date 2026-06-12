@@ -10,15 +10,17 @@ export const useAuth = () => {
 
   useEffect(() => {
     if (!isSupabaseConfigured()) {
-      // 延遲設置以避免同步 setState
       queueMicrotask(() => setLoading(false));
       return;
     }
 
-    // 取得目前 session（不做 public.users upsert，交由 DB trigger 處理）
+    // 取得目前 session（implicit flow 會自動從 URL hash 偵測 token）
     supabase.auth.getSession()
       .then(({ data: { session } }) => {
         setUser(session?.user ?? null);
+        if (window.location.hash && window.location.hash.includes('access_token')) {
+          window.history.replaceState({}, '', window.location.pathname);
+        }
       })
       .catch(() => {
         setUser(null);

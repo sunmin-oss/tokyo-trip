@@ -1,7 +1,9 @@
 # Trip Planner ✈️
 
 > React + Vite + Supabase 打造的一站式旅遊行程規劃 SPA。
-> 支援多行程管理、行程時間軸、互動地圖、多幣別預算追蹤、打包清單，以及雲端同步。
+> 支援多行程管理、行程時間軸、成員管理、互動地圖、多幣別預算追蹤、打包清單，以及雲端同步。
+>
+> 🌐 **線上版本**：<https://tokyo-trip-exq.pages.dev/>
 
 ---
 
@@ -18,9 +20,14 @@
 ![行程列表](docs/screenshots/02-trip-list.png)
 
 ### 行程時間軸
-依天/時段排列事件，支援拖曳排序、跨天移動、智慧分類。
+依天/時段排列事件，左側時間軸搭配右側事件卡片，支援拖曳排序、跨天移動、智慧分類。
 
 ![行程時間軸](docs/screenshots/03-timeline.png)
+
+### 成員管理
+建立旅伴名單，並可在事件中指派參與成員。
+
+![成員管理](docs/screenshots/07-members.png)
 
 ### 預算追蹤（多幣別換算）
 所有花費以 JPY 為基準儲存，可即時切換 TWD / USD / EUR / KRW 顯示。
@@ -45,8 +52,10 @@
 
 - **多行程管理**：可建立多筆旅行，快速切換不同旅程
 - **行程編排**：支援 Day / Event 新增、編輯、刪除、拖曳排序
+- **行程日期編輯**：建立行程後可隨時調整標題、描述、起訖日期
+- **時間範圍**：事件可設定開始與結束時間，重疊時段自動並排顯示
 - **智慧分類**：輸入關鍵字自動分類（食物、交通、購物等）
-- **動態組別**：建立分組（如「美食組」），支援分組時間軸並排顯示
+- **成員管理**：建立旅伴名單，並將成員指派給個別事件
 - **地圖整合**：Leaflet + Nominatim 地理編碼，標記地點並顯示路線
 - **多幣別預算**：以 JPY 為基準，即時換算 TWD / USD / EUR / KRW（1 小時快取）
 - **打包清單**：新增、勾選、刪除，預設常用物品一鍵加入
@@ -63,7 +72,7 @@
 | 地圖 | Leaflet + react-leaflet + OpenStreetMap Nominatim |
 | 拖曳排序 | @dnd-kit |
 | 匯率 API | open.er-api.com（1 小時 localStorage 快取）|
-| 部署 | GitHub Pages（`npm run deploy`）|
+| 部署 | Cloudflare Pages（`npm run deploy`）|
 | 語系 | zh-TW |
 
 ## 專案結構
@@ -73,10 +82,11 @@ src/
   components/
     AuthPage.jsx          # 登入 / 註冊
     TripList.jsx           # 行程列表 + 範本
-    TripDetail.jsx         # 行程詳情（時間軸 + 事件 CRUD）
+    TripDetail.jsx         # 行程詳情（時間軸 + 事件 CRUD + 日期編輯）
     TripMap.jsx            # Leaflet 地圖
-    EventTimelineGroup.jsx # 分組時間軸
-    GroupSelector.jsx      # 組別管理
+    EventTimelineGroup.jsx # 時間軸事件卡片
+    MemberManager.jsx      # 成員名單管理 + 事件成員指派
+    LocationSearch.jsx     # 地點搜尋（Nominatim）
     tabs/
       BudgetTab.jsx        # 預算分頁（多幣別換算）
       PackingTab.jsx       # 打包清單分頁
@@ -114,9 +124,7 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 npm run dev
 ```
 
-預設網址：
-
-http://localhost:5173/tokyo-trip/
+預設網址：http://localhost:5173/
 
 ### 4) 產生建置
 
@@ -128,7 +136,7 @@ npm run build
 
 請確認下列條件：
 
-1. public.users, trips, days, events, groups 資料表已建立
+1. public.users, trips, days, events, trip_members 資料表已建立
 2. RLS 與 Policy 已啟用（authenticated user 可操作自己的資料）
 3. auth.users -> public.users 觸發器存在
 4. events 表有 cost 欄位
@@ -137,6 +145,8 @@ npm run build
 
 ```sql
 ALTER TABLE public.events ADD COLUMN IF NOT EXISTS cost numeric DEFAULT 0;
+ALTER TABLE public.events ADD COLUMN IF NOT EXISTS end_time TEXT;
+ALTER TABLE public.events ADD COLUMN IF NOT EXISTS assignees JSONB DEFAULT '[]';
 ```
 
 ```sql
@@ -157,23 +167,24 @@ WHERE table_schema = 'public'
 
 1. 進入首頁，選擇登入或使用本地模式
 2. 建立新行程或套用範本（東京 / 首爾 / 大阪京都）
-3. 進入行程詳情，新增 Day 與 Event（含時間、地點、花費）
-4. 切換「地圖」分頁查看標記與路線
-5. 切換「預算」分頁，切換幣別查看即時換算
-6. 切換「打包清單」分頁，勾選已完成物品
-7. 回行程列表，刷新頁面確認資料可回載
+3. 進入行程詳情，新增 Day 與 Event（含時間範圍、地點、花費）
+4. 點擊右上角編輯按鈕可修改行程標題、描述、起訖日期
+5. 使用「成員」功能新增旅伴，並在事件中指派成員
+6. 切換「地圖」分頁查看標記與路線
+7. 切換「預算」分頁，切換幣別查看即時換算
+8. 切換「打包清單」分頁，勾選已完成物品
+9. 回行程列表，刷新頁面確認資料可回載
 
 ## 貢獻指南
 
 請參閱 [CONTRIBUTING.md](CONTRIBUTING.md)。
 所有 commit 須遵循 Conventional Commits 規範。
-5. 預算與匯率換算正常
-6. 重新整理後資料仍可從雲端回載
 
 ## 專案狀態
 
 - 核心功能：完成
 - 雲端整合：完成
+- 部署平台：Cloudflare Pages
 - 最終驗證：通過
 
 ## 授權

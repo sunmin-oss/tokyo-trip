@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
 import {
   MapPin, Utensils, ShoppingBag, Train, Moon, Gamepad2,
-  Users, Edit2, Save, X, Plus, Database, Trash2, ArrowLeft,
-  DollarSign, TrendingUp, ClipboardList, PackageCheck, Map, GripVertical
+  Edit2, Save, X, Plus, Database, Trash2, ArrowLeft,
+  DollarSign, TrendingUp, ClipboardList, PackageCheck, Map, GripVertical, UserPlus
 } from 'lucide-react';
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors,
@@ -12,6 +12,8 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 const TripMap = lazy(() => import('./TripMap'));
+import LocationSearch from './LocationSearch';
+import { MemberManager, MemberSelector } from './MemberManager';
 import { supabase, isSupabaseConfigured } from '../supabaseClient';
 import {
   fetchExchangeRates,
@@ -21,10 +23,8 @@ import {
   BASE_CURRENCY,
 } from '../services/exchangeRate';
 import { EventTimelineGroup } from './EventTimelineGroup';
-import { GroupManagementPanel, GroupSelector } from './GroupSelector';
 import {
   groupEventsByTimeAndGroup,
-  getColorClasses,
   getGridColsClass
 } from '../utils/dataTransform';
 import { useDebouncedEffect } from '../hooks/useDebouncedEffect';
@@ -34,7 +34,7 @@ import PackingTab from './tabs/PackingTab';
 /**
  * TripDetail - 單一行程的詳細頁面（含 Supabase 同步）
  */
-const TripDetail = ({ trip, user, onBack }) => {
+const TripDetail = ({ trip, user, onBack, onUpdateTrip }) => {
   const [activeDay, setActiveDay] = useState(1);
   const [isScrolled, setIsScrolled] = useState(false);
   const [isEditingEvent, setIsEditingEvent] = useState(null);
@@ -42,11 +42,15 @@ const TripDetail = ({ trip, user, onBack }) => {
   const [isAddingDay, setIsAddingDay] = useState(false);
   const [isAddingEvent, setIsAddingEvent] = useState(false);
   const [schedule, setSchedule] = useState([]);
-  const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [newDayForm, setNewDayForm] = useState({ date: '', title: '', theme: 'bg-green-500', newGroups: [] });
-  const [newEventForm, setNewEventForm] = useState({ time: '', title: '', desc: '', type: 'sight', location: '', group_id: null, cost: '' });
+  const [newDayForm, setNewDayForm] = useState({ date: '', title: '', theme: 'bg-green-500' });
+  const [newEventForm, setNewEventForm] = useState({ time: '', endTime: '', title: '', desc: '', type: 'sight', location: '', cost: '', assignees: [] });
   const [activeTab, setActiveTab] = useState('timeline'); // 'timeline' | 'map' | 'budget' | 'packing'
+  const [showDayManager, setShowDayManager] = useState(false);
+  const [showMemberManager, setShowMemberManager] = useState(false);
+  const [members, setMembers] = useState([]);
+  const [showTripEdit, setShowTripEdit] = useState(false);
+  const [tripEditForm, setTripEditForm] = useState({});
   const [packingItems, setPackingItems] = useState([]);
   const [newPackingItem, setNewPackingItem] = useState('');
   const [currency, setCurrency] = useState('JPY');
@@ -76,9 +80,9 @@ const TripDetail = ({ trip, user, onBack }) => {
     setLoading(true);
     try {
       if (isCloud) {
-        const [{ data: dbGroups }, { data: dbDays }] = await Promise.all([
-          supabase.from('groups').select('*').eq('trip_id', trip.id).order('order_index'),
-          supabase.from('days').select('*').eq('trip_id', trip.id).order('day_number')
+        const [{ data: dbDays }, { data: dbMembers }] = await Promise.all([
+          supabase.from('days').select('*').eq('trip_id', trip.id).order('day_number'),
+          supabase.from('trip_members').select('*').eq('trip_id', trip.id).order('created_at')
         ]);
 
         if (dbDays && dbDays.length > 0) {
@@ -86,7 +90,7 @@ const TripDetail = ({ trip, user, onBack }) => {
             dbDays.map(async (day) => {
               const { data: events } = await supabase
                 .from('events')
-                .select('*, groups:group_id(id, name, color)')
+                .select('*')
                 .eq('day_id', day.id)
                 .order('order_index');
               return {
@@ -98,12 +102,13 @@ const TripDetail = ({ trip, user, onBack }) => {
                 events: (events || []).map((evt) => ({
                   _id: evt.id,
                   time: evt.time,
+                  endTime: evt.end_time || '',
                   title: evt.title,
                   desc: evt.description || '',
                   type: evt.event_type || 'sight',
                   location: evt.location,
-                  group_id: evt.group_id,
-                  cost: evt.cost || 0
+                  cost: evt.cost || 0,
+                  assignees: evt.assignees || []
                 }))
               };
             })
@@ -113,7 +118,7 @@ const TripDetail = ({ trip, user, onBack }) => {
           setSchedule([]);
         }
 
-        setGroups((dbGroups || []).map(g => ({ id: g.id, name: g.name, color: g.color })));
+        setMembers((dbMembers || []).map(m => ({ id: m.id, name: m.name, email: m.email || '', note: m.note || '' })));
       } else {
         // 本地模式
         const key = `trip_${trip.id}`;
@@ -121,7 +126,7 @@ const TripDetail = ({ trip, user, onBack }) => {
         if (saved) {
           const parsed = JSON.parse(saved);
           setSchedule(parsed.schedule || []);
-          setGroups(parsed.groups || []);
+          setMembers(parsed.members || []);
           if (parsed.packingItems) setPackingItems(parsed.packingItems);
           if (parsed.currency) setCurrency(parsed.currency);
         }
@@ -139,17 +144,23 @@ const TripDetail = ({ trip, user, onBack }) => {
       if (!isCloud && !loading) {
         localStorage.setItem(
           `trip_${trip.id}`,
-          JSON.stringify({ schedule, groups, packingItems, currency })
+          JSON.stringify({ schedule, members, packingItems, currency })
         );
       }
     },
-    [schedule, groups, packingItems, currency, loading, isCloud, trip.id],
+    [schedule, members, packingItems, currency, loading, isCloud, trip.id],
     500
   );
 
   // ==================== Supabase 同步 CRUD ====================
 
   const addNewDay = async () => {
+    // 檢查日期是否重複
+    if (newDayForm.date && schedule.some(d => d.date === newDayForm.date)) {
+      alert('此日期已有行程，請選擇其他日期');
+      return;
+    }
+
     const dayNumber = schedule.length + 1;
 
     try {
@@ -167,27 +178,14 @@ const TripDetail = ({ trip, user, onBack }) => {
           .select();
         if (error) throw error;
         newDay = { _id: data[0].id, day: dayNumber, date: newDayForm.date, title: newDayForm.title, theme: newDayForm.theme, events: [] };
-
-        // 新增該日程的組別
-        if (newDayForm.newGroups?.length > 0) {
-          const groupInserts = newDayForm.newGroups.map((g, idx) => ({
-            trip_id: trip.id, name: g.name, color: g.color, order_index: groups.length + idx
-          }));
-          const { data: newGs, error: gErr } = await supabase.from('groups').insert(groupInserts).select();
-          if (gErr) throw gErr;
-          setGroups(prev => [...prev, ...newGs.map(g => ({ id: g.id, name: g.name, color: g.color }))]);
-        }
       } else {
         newDay = { _id: `day-${Date.now()}`, day: dayNumber, date: newDayForm.date, title: newDayForm.title, theme: newDayForm.theme, events: [] };
-        if (newDayForm.newGroups?.length > 0) {
-          setGroups(prev => [...prev, ...newDayForm.newGroups]);
-        }
       }
 
       setSchedule(prev => [...prev, newDay]);
       setActiveDay(dayNumber);
       setIsAddingDay(false);
-      setNewDayForm({ date: '', title: '', theme: 'bg-green-500', newGroups: [] });
+      setNewDayForm({ date: '', title: '', theme: 'bg-green-500' });
     } catch (err) {
       console.error('新增日程失敗:', err);
     }
@@ -215,12 +213,13 @@ const TripDetail = ({ trip, user, onBack }) => {
 
     const eventData = {
       time: newEventForm.time,
+      endTime: newEventForm.endTime || undefined,
       title: newEventForm.title,
       desc: newEventForm.desc,
       type: newEventForm.type,
       location: newEventForm.location || undefined,
-      group_id: newEventForm.group_id || undefined,
-      cost: parseFloat(newEventForm.cost) || 0
+      cost: parseFloat(newEventForm.cost) || 0,
+      assignees: newEventForm.assignees || []
     };
 
     try {
@@ -231,12 +230,13 @@ const TripDetail = ({ trip, user, onBack }) => {
             day_id: day._id,
             trip_id: trip.id,
             time: eventData.time,
+            end_time: eventData.endTime || null,
             title: eventData.title,
             description: eventData.desc,
             event_type: eventData.type,
             location: eventData.location,
-            group_id: eventData.group_id || null,
             cost: eventData.cost || 0,
+            assignees: eventData.assignees,
             order_index: day.events.length
           }])
           .select();
@@ -246,9 +246,11 @@ const TripDetail = ({ trip, user, onBack }) => {
 
       const newSchedule = [...schedule];
       newSchedule[dayIdx].events.push(eventData);
+      // 按時間排序
+      newSchedule[dayIdx].events.sort((a, b) => (a.time || '').localeCompare(b.time || ''));
       setSchedule(newSchedule);
       setIsAddingEvent(false);
-      setNewEventForm({ time: '', title: '', desc: '', type: 'sight', location: '', group_id: null, cost: '' });
+      setNewEventForm({ time: '', endTime: '', title: '', desc: '', type: 'sight', location: '', cost: '', assignees: [] });
     } catch (err) {
       console.error('新增事件失敗:', err);
     }
@@ -261,12 +263,13 @@ const TripDetail = ({ trip, user, onBack }) => {
       if (isCloud && event._id) {
         const dbUpdates = {};
         if (updates.time !== undefined) dbUpdates.time = updates.time;
+        if (updates.endTime !== undefined) dbUpdates.end_time = updates.endTime || null;
         if (updates.title !== undefined) dbUpdates.title = updates.title;
         if (updates.desc !== undefined) dbUpdates.description = updates.desc;
         if (updates.type !== undefined) dbUpdates.event_type = updates.type;
         if (updates.location !== undefined) dbUpdates.location = updates.location || null;
-        if (updates.group_id !== undefined) dbUpdates.group_id = updates.group_id || null;
         if (updates.cost !== undefined) dbUpdates.cost = updates.cost || 0;
+        if (updates.assignees !== undefined) dbUpdates.assignees = updates.assignees;
 
         const { error } = await supabase.from('events').update(dbUpdates).eq('id', event._id);
         if (error) throw error;
@@ -274,6 +277,10 @@ const TripDetail = ({ trip, user, onBack }) => {
 
       const newSchedule = [...schedule];
       newSchedule[dayIndex].events[eventIndex] = { ...event, ...updates };
+      // 若時間有變動，重新排序
+      if (updates.time !== undefined) {
+        newSchedule[dayIndex].events.sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+      }
       setSchedule(newSchedule);
     } catch (err) {
       console.error('更新事件失敗:', err);
@@ -306,9 +313,10 @@ const TripDetail = ({ trip, user, onBack }) => {
   const openEditModal = (dayIdx, eventIdx, event) => {
     setIsEditingEvent({ dayIdx, eventIdx });
     setEditForm({
-      time: event.time, title: event.title, desc: event.desc,
+      time: event.time, endTime: event.endTime || '', title: event.title, desc: event.desc,
       location: event.location || '', type: event.type || 'sight',
-      group_id: event.group_id || null, cost: event.cost || ''
+      cost: event.cost || '',
+      assignees: event.assignees || []
     });
   };
 
@@ -318,11 +326,99 @@ const TripDetail = ({ trip, user, onBack }) => {
     if (isEditingEvent) {
       const { dayIdx, eventIdx } = isEditingEvent;
       updateEvent(dayIdx, eventIdx, {
-        time: editForm.time, title: editForm.title, desc: editForm.desc,
+        time: editForm.time, endTime: editForm.endTime, title: editForm.title, desc: editForm.desc,
         location: editForm.location || undefined, type: editForm.type,
-        group_id: editForm.group_id, cost: parseFloat(editForm.cost) || 0
+        cost: parseFloat(editForm.cost) || 0,
+        assignees: editForm.assignees || []
       });
       closeEditModal();
+    }
+  };
+
+  // ==================== 成員管理 ====================
+
+  const handleAddMember = async (member) => {
+    try {
+      if (isCloud) {
+        const { data, error } = await supabase.from('trip_members')
+          .insert([{ trip_id: trip.id, name: member.name, email: member.email || null, note: member.note || null }])
+          .select();
+        if (error) throw error;
+        setMembers(prev => [...prev, { id: data[0].id, name: data[0].name, email: data[0].email || '', note: data[0].note || '' }]);
+      } else {
+        setMembers(prev => [...prev, { id: `member-${Date.now()}`, ...member }]);
+      }
+    } catch (err) {
+      console.error('新增成員失敗:', err);
+    }
+  };
+
+  const handleUpdateMember = async (memberId, updates) => {
+    try {
+      if (isCloud) {
+        const { error } = await supabase.from('trip_members').update(updates).eq('id', memberId);
+        if (error) throw error;
+      }
+      setMembers(prev => prev.map(m => m.id === memberId ? { ...m, ...updates } : m));
+    } catch (err) {
+      console.error('更新成員失敗:', err);
+    }
+  };
+
+  const handleRemoveMember = async (memberId) => {
+    if (!confirm('確定移除此成員？')) return;
+    try {
+      if (isCloud) {
+        const { error } = await supabase.from('trip_members').delete().eq('id', memberId);
+        if (error) throw error;
+      }
+      // 從所有事件的 assignees 中移除該成員
+      setSchedule(prev => prev.map(day => ({
+        ...day,
+        events: day.events.map(e => ({
+          ...e,
+          assignees: (e.assignees || []).filter(id => id !== memberId)
+        }))
+      })));
+      setMembers(prev => prev.filter(m => m.id !== memberId));
+    } catch (err) {
+      console.error('移除成員失敗:', err);
+    }
+  };
+
+  // ==================== 行程資訊編輯 ====================
+
+  const openTripEdit = () => {
+    setTripEditForm({
+      title: trip.title || '',
+      description: trip.description || '',
+      start_date: trip.start_date || '',
+      end_date: trip.end_date || ''
+    });
+    setShowTripEdit(true);
+  };
+
+  const saveTripEdit = async () => {
+    if (!tripEditForm.title || !tripEditForm.start_date || !tripEditForm.end_date) return;
+    try {
+      if (isCloud) {
+        const { error } = await supabase.from('trips').update({
+          title: tripEditForm.title,
+          description: tripEditForm.description || null,
+          start_date: tripEditForm.start_date,
+          end_date: tripEditForm.end_date
+        }).eq('id', trip.id);
+        if (error) throw error;
+      }
+      onUpdateTrip?.({
+        title: tripEditForm.title,
+        description: tripEditForm.description,
+        start_date: tripEditForm.start_date,
+        end_date: tripEditForm.end_date
+      });
+      setShowTripEdit(false);
+    } catch (err) {
+      console.error('更新行程資訊失敗:', err);
     }
   };
 
@@ -330,12 +426,6 @@ const TripDetail = ({ trip, user, onBack }) => {
 
   const openMap = (location) => {
     window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`, '_blank', 'noopener,noreferrer');
-  };
-
-  const dayHasGroups = (day) => day.events?.some(e => e.group_id);
-  const getDayGroups = (day) => {
-    const groupIds = [...new Set(day.events?.filter(e => e.group_id).map(e => e.group_id))];
-    return groups.filter(g => groupIds.includes(g.id));
   };
 
   // ==================== 預算計算（皆以 BASE_CURRENCY = JPY 為基準）====================
@@ -404,31 +494,20 @@ const TripDetail = ({ trip, user, onBack }) => {
     return null;
   };
 
-  // ==================== 渲染：分組時間軸 ====================
+  // ==================== 渲染：時間軸 ====================
 
-  const renderGroupedTimeline = (dayData) => {
-    const dayGroups = getDayGroups(dayData);
-    const timeSlots = groupEventsByTimeAndGroup(dayData.events, dayGroups);
+  const renderTimeline = (dayData) => {
+    const timeSlots = groupEventsByTimeAndGroup(dayData.events, []);
     return (
       <div className="space-y-6">
-        <div className={`grid ${getGridColsClass(dayGroups.length)} gap-4 mb-6 sticky top-28 z-30`}>
-          {dayGroups.map(group => {
-            const colors = getColorClasses(group.color);
-            return (
-              <div key={group.id} className={`${colors.bg} ${colors.text} p-3 rounded-lg text-center font-bold shadow-sm border-2 ${colors.border}`}>
-                {group.name}
-              </div>
-            );
-          })}
-        </div>
         {timeSlots.map((timeSlot, idx) => (
           <div key={idx} className="animate-slide-up" style={{ animationDelay: `${idx * 100}ms` }}>
             <EventTimelineGroup
               timeEvent={timeSlot}
-              groupCount={dayGroups.length}
               sym={sym}
               currency={currency}
               exchangeRates={exchangeRates}
+              members={members}
               onEditEvent={(event) => {
                 const eventIdx = dayData.events.indexOf(event);
                 if (eventIdx !== -1) openEditModal(activeDay - 1, eventIdx, event);
@@ -498,6 +577,8 @@ const TripDetail = ({ trip, user, onBack }) => {
     }
 
     newSchedule[toDayIdx].events.push(moved);
+    // 按時間排序
+    newSchedule[toDayIdx].events.sort((a, b) => (a.time || '').localeCompare(b.time || ''));
     setSchedule(newSchedule);
   };
 
@@ -514,7 +595,7 @@ const TripDetail = ({ trip, user, onBack }) => {
     return (
       <div ref={setNodeRef} style={style} className="flex group" {...attributes}>
         <div className="w-16 flex-shrink-0 flex flex-col items-center">
-          <span className="text-sm font-bold text-slate-500 group-hover:text-slate-800 transition-colors">{event.time}</span>
+          <span className="text-sm font-bold text-slate-500 group-hover:text-slate-800 transition-colors">{event.time}{event.endTime ? `~${event.endTime}` : ''}</span>
           <div className="h-full w-0.5 bg-slate-200 mt-2 mb-2 relative">
             <div className={`absolute top-0 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full ${dayData.theme}`} />
           </div>
@@ -549,6 +630,18 @@ const TripDetail = ({ trip, user, onBack }) => {
                         <span className="ml-1 text-slate-400 font-normal">{formatBaseHint(event.cost, currency)}</span>
                       )}
                     </span>
+                  )}
+                  {event.assignees && event.assignees.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {event.assignees.map(mid => {
+                        const m = members.find(mm => mm.id === mid);
+                        return m ? (
+                          <span key={mid} className="inline-flex items-center text-xs font-medium text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full">
+                            {m.name}
+                          </span>
+                        ) : null;
+                      })}
+                    </div>
                   )}
                 </div>
               </div>
@@ -623,6 +716,12 @@ const TripDetail = ({ trip, user, onBack }) => {
             <ArrowLeft className="w-4 h-4" /> 行程列表
           </button>
         </div>
+        <div className="absolute top-4 right-4">
+          <button onClick={openTripEdit}
+            className="p-2 bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white rounded-lg transition-colors" title="編輯行程資訊">
+            <Edit2 className="w-4 h-4" />
+          </button>
+        </div>
         <div className="absolute bottom-0 left-0 p-6 text-white w-full">
           <h1 className="text-2xl md:text-4xl font-extrabold mb-1">{trip.title}</h1>
           {trip.description && <p className="text-slate-300 text-sm mb-2">{trip.description}</p>}
@@ -639,7 +738,7 @@ const TripDetail = ({ trip, user, onBack }) => {
       </div>
 
       {/* Sticky Navigation */}
-      <div className={`sticky top-0 z-40 bg-white/95 backdrop-blur-md shadow-sm border-b border-slate-200 transition-all duration-300 ${isScrolled ? 'py-2' : 'py-4'}`}>
+      <div className="sticky top-0 z-40 bg-white/95 backdrop-blur-md shadow-sm border-b border-slate-200 py-3">
         <div className="max-w-3xl mx-auto px-4 flex items-center justify-between gap-3">
           <div className="overflow-x-auto no-scrollbar flex space-x-3 snap-x flex-1">
             {schedule.map((day) => (
@@ -653,16 +752,30 @@ const TripDetail = ({ trip, user, onBack }) => {
                   <span className="block text-xs opacity-80 font-medium">Day {day.day}</span>
                   <span>{day.date?.split(' ')[0] || `Day ${day.day}`}</span>
                 </button>
-                {schedule.length > 1 && (
-                  <button onClick={() => deleteDay(day.day - 1)}
-                    className="absolute -top-2 -right-2 p-1 bg-red-500 hover:bg-red-600 text-white rounded-full shadow-md transition-colors opacity-0 hover:opacity-100" title="刪除此日程">
-                    <Trash2 className="w-3 h-3" />
-                  </button>
-                )}
               </div>
             ))}
           </div>
-          <button onClick={() => setIsAddingDay(true)}
+          <button onClick={() => setShowDayManager(true)}
+            className="flex-shrink-0 p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors" title="日程管理">
+            <Edit2 className="w-5 h-5" />
+          </button>
+          <button onClick={() => {
+            // 計算預設日期：根據已有日程推算下一天
+            let defaultDate = '';
+            if (trip.start_date) {
+              const start = new Date(trip.start_date);
+              const nextDate = new Date(start);
+              nextDate.setDate(start.getDate() + schedule.length);
+              // 確保不超過 end_date
+              if (trip.end_date) {
+                const end = new Date(trip.end_date);
+                if (nextDate > end) nextDate.setTime(end.getTime());
+              }
+              defaultDate = nextDate.toISOString().split('T')[0];
+            }
+            setNewDayForm({ date: defaultDate, title: '', theme: 'bg-green-500', newGroups: [] });
+            setIsAddingDay(true);
+          }}
             className="flex-shrink-0 p-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors" title="新增日程">
             <Plus className="w-5 h-5" />
           </button>
@@ -689,7 +802,81 @@ const TripDetail = ({ trip, user, onBack }) => {
             className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-1.5 ${activeTab === 'packing' ? 'bg-amber-500 text-white' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}`}>
             <PackageCheck className="w-4 h-4" /> 打包清單
           </button>
+          <button onClick={() => setShowMemberManager(true)}
+            className="px-4 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-1.5 bg-white text-slate-500 border border-slate-200 hover:bg-slate-50">
+            <UserPlus className="w-4 h-4" /> 成員
+            {members.length > 0 && <span className="bg-blue-100 text-blue-600 text-xs px-1.5 py-0.5 rounded-full">{members.length}</span>}
+          </button>
         </div>
+
+        {/* 成員管理彈窗 */}
+        {showMemberManager && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-fade-in max-h-[80vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                  <UserPlus className="w-5 h-5" /> 成員名單
+                </h3>
+                <button onClick={() => setShowMemberManager(false)} className="p-1 hover:bg-slate-100 rounded-lg">
+                  <X className="w-5 h-5 text-slate-400" />
+                </button>
+              </div>
+              <MemberManager
+                members={members}
+                onAddMember={handleAddMember}
+                onUpdateMember={handleUpdateMember}
+                onRemoveMember={handleRemoveMember}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* 日程管理彈窗 */}
+        {showDayManager && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-fade-in max-h-[80vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                  <ClipboardList className="w-5 h-5" /> 日程管理
+                </h3>
+                <button onClick={() => setShowDayManager(false)} className="p-1 hover:bg-slate-100 rounded-lg">
+                  <X className="w-5 h-5 text-slate-400" />
+                </button>
+              </div>
+              {schedule.length === 0 ? (
+                <p className="text-sm text-slate-400 text-center py-4">尚未新增日程</p>
+              ) : (
+                <div className="space-y-3">
+                  {schedule.map((day, idx) => (
+                    <div key={day._id || idx} className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 bg-slate-50">
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold text-sm ${day.theme || 'bg-green-500'}`}>
+                        D{day.day}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-semibold text-slate-700">{day.date || `Day ${day.day}`}</div>
+                        <div className="text-xs text-slate-500 truncate">{day.title || '無主題'}</div>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs text-slate-400">{day.events?.length || 0} 個事件</span>
+                        {schedule.length > 1 && (
+                          <button onClick={() => {
+                            if (confirm(`確定刪除 Day ${day.day}（${day.date || ''}）？該日所有事件也會被刪除。`)) {
+                              deleteDay(idx);
+                              if (schedule.length <= 1) setShowDayManager(false);
+                            }
+                          }}
+                            className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="刪除日程">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* ===== Tab: Timeline ===== */}
         {activeTab === 'timeline' && (
@@ -712,18 +899,6 @@ const TripDetail = ({ trip, user, onBack }) => {
                         <DollarSign className="w-3.5 h-3.5" /> {formatCost(getDayCost(currentDayData), currency, exchangeRates)}
                       </span>
                     )}
-                    {dayHasGroups(currentDayData) && (
-                      <div className="flex gap-2 mt-2">
-                        {getDayGroups(currentDayData).map(group => {
-                          const colors = getColorClasses(group.color);
-                          return (
-                            <span key={group.id} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${colors.bg} ${colors.text} border ${colors.border}`}>
-                              <Users className="w-3 h-3" /> {group.name}
-                            </span>
-                          );
-                        })}
-                      </div>
-                    )}
                   </div>
                   <button onClick={() => setIsAddingEvent(true)}
                     className="flex-shrink-0 p-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors flex items-center gap-2 font-semibold" title="新增事件">
@@ -731,7 +906,7 @@ const TripDetail = ({ trip, user, onBack }) => {
                     <span className="hidden sm:inline">新增事件</span>
                   </button>
                 </div>
-                {dayHasGroups(currentDayData) ? renderGroupedTimeline(currentDayData) : renderRegularTimeline(currentDayData)}
+                {renderTimeline(currentDayData)}
               </>
             )}
           </>
@@ -770,6 +945,57 @@ const TripDetail = ({ trip, user, onBack }) => {
         <p className="text-center text-slate-400 text-xs">Have a nice trip! ✈️</p>
       </div>
 
+      {/* ==================== Edit Trip Info Modal ==================== */}
+      {showTripEdit && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-fade-in max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold text-slate-800">編輯行程資訊</h3>
+              <button onClick={() => setShowTripEdit(false)} className="p-1 hover:bg-slate-100 rounded-lg"><X className="w-5 h-5 text-slate-400" /></button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1">行程名稱</label>
+                <input type="text" value={tripEditForm.title} onChange={(e) => setTripEditForm(prev => ({ ...prev, title: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="行程名稱" />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1">描述</label>
+                <textarea value={tripEditForm.description} onChange={(e) => setTripEditForm(prev => ({ ...prev, description: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" rows="2" placeholder="行程描述（選填）" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">開始日期</label>
+                  <input type="date" value={tripEditForm.start_date} onChange={(e) => setTripEditForm(prev => ({ ...prev, start_date: e.target.value }))}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">結束日期</label>
+                  <input type="date" value={tripEditForm.end_date}
+                    min={tripEditForm.start_date || ''}
+                    onChange={(e) => setTripEditForm(prev => ({ ...prev, end_date: e.target.value }))}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+              </div>
+              {tripEditForm.start_date && tripEditForm.end_date && (
+                <p className="text-sm text-slate-500">
+                  共 {Math.max(1, Math.round((new Date(tripEditForm.end_date) - new Date(tripEditForm.start_date)) / 86400000) + 1)} 天
+                </p>
+              )}
+              <div className="flex gap-3 mt-6">
+                <button onClick={() => setShowTripEdit(false)} className="flex-1 px-4 py-2 text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg font-semibold">取消</button>
+                <button onClick={saveTripEdit}
+                  disabled={!tripEditForm.title || !tripEditForm.start_date || !tripEditForm.end_date}
+                  className="flex-1 px-4 py-2 text-white bg-blue-500 hover:bg-blue-600 disabled:bg-slate-300 rounded-lg font-semibold flex items-center justify-center gap-2">
+                  <Save className="w-4 h-4" /> 儲存
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ==================== Edit Event Modal ==================== */}
       {isEditingEvent && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -781,8 +1007,13 @@ const TripDetail = ({ trip, user, onBack }) => {
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1">時間</label>
-                <input type="text" value={editForm.time} onChange={(e) => { const v = e.target.value; setEditForm(prev => ({ ...prev, time: v })); }}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="例：18:30" />
+                <div className="flex items-center gap-2">
+                  <input type="time" value={editForm.time} onChange={(e) => { const v = e.target.value; setEditForm(prev => ({ ...prev, time: v })); }}
+                    className="flex-1 px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <span className="text-slate-400 font-medium">~</span>
+                  <input type="time" value={editForm.endTime} onChange={(e) => { const v = e.target.value; setEditForm(prev => ({ ...prev, endTime: v })); }}
+                    className="flex-1 px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="結束" />
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1">標題</label>
@@ -796,8 +1027,7 @@ const TripDetail = ({ trip, user, onBack }) => {
               </div>
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1">地點</label>
-                <input type="text" value={editForm.location} onChange={(e) => { const v = e.target.value; setEditForm(prev => ({ ...prev, location: v })); }}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="地點名稱" />
+                <LocationSearch value={editForm.location} onChange={(v) => setEditForm(prev => ({ ...prev, location: v }))} placeholder="搜尋地點名稱" />
               </div>
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1">類型</label>
@@ -811,9 +1041,9 @@ const TripDetail = ({ trip, user, onBack }) => {
                 <input type="number" min="0" step="1" value={editForm.cost} onChange={(e) => { const v = e.target.value; setEditForm(prev => ({ ...prev, cost: v })); }}
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0" />
               </div>
-              {groups.length > 0 && (
-                <GroupSelector groups={groups} selectedGroupId={editForm.group_id}
-                  onSelectGroup={(groupId) => setEditForm(prev => ({ ...prev, group_id: groupId }))} />
+              {members.length > 0 && (
+                <MemberSelector members={members} selectedMemberIds={editForm.assignees || []}
+                  onChangeMembers={(ids) => setEditForm(prev => ({ ...prev, assignees: ids }))} />
               )}
               <div className="flex gap-3 mt-6">
                 <button onClick={closeEditModal} className="flex-1 px-4 py-2 text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg font-semibold">取消</button>
@@ -837,8 +1067,9 @@ const TripDetail = ({ trip, user, onBack }) => {
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1">日期</label>
-                <input type="text" value={newDayForm.date} onChange={(e) => setNewDayForm({ ...newDayForm, date: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="例：1/24 (六)" />
+                <input type="date" value={newDayForm.date} onChange={(e) => setNewDayForm({ ...newDayForm, date: e.target.value })}
+                  min={trip.start_date || ''} max={trip.end_date || ''}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500" />
               </div>
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1">主題</label>
@@ -851,24 +1082,6 @@ const TripDetail = ({ trip, user, onBack }) => {
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500">
                   {themeOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                 </select>
-              </div>
-              <div className="border-t pt-4">
-                <h4 className="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
-                  <Users className="w-4 h-4" /> 為此日新增組別（可選）
-                </h4>
-                {groups.length > 0 && (
-                  <div className="mb-3 flex flex-wrap gap-2">
-                    {groups.map(g => {
-                      const colors = getColorClasses(g.color);
-                      return <span key={g.id} className={`px-2 py-1 rounded-full text-xs font-semibold ${colors.bg} ${colors.text} border ${colors.border}`}>{g.name}</span>;
-                    })}
-                  </div>
-                )}
-                <GroupManagementPanel groups={newDayForm.newGroups || []}
-                  onAddGroup={(gd) => { const ng = { id: `group-${Date.now()}`, ...gd }; setNewDayForm({ ...newDayForm, newGroups: [...(newDayForm.newGroups || []), ng] }); }}
-                  onUpdateGroup={(gid, u) => { setNewDayForm({ ...newDayForm, newGroups: (newDayForm.newGroups || []).map(g => g.id === gid ? { ...g, ...u } : g) }); }}
-                  onRemoveGroup={(gid) => { setNewDayForm({ ...newDayForm, newGroups: (newDayForm.newGroups || []).filter(g => g.id !== gid) }); }}
-                />
               </div>
               <div className="flex gap-3 mt-6">
                 <button onClick={() => setIsAddingDay(false)} className="flex-1 px-4 py-2 text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg font-semibold">取消</button>
@@ -892,8 +1105,13 @@ const TripDetail = ({ trip, user, onBack }) => {
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1">時間</label>
-                <input type="text" value={newEventForm.time} onChange={(e) => { const v = e.target.value; setNewEventForm(prev => ({ ...prev, time: v })); }}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="例：10:00" />
+                <div className="flex items-center gap-2">
+                  <input type="time" value={newEventForm.time} onChange={(e) => { const v = e.target.value; setNewEventForm(prev => ({ ...prev, time: v })); }}
+                    className="flex-1 px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <span className="text-slate-400 font-medium">~</span>
+                  <input type="time" value={newEventForm.endTime} onChange={(e) => { const v = e.target.value; setNewEventForm(prev => ({ ...prev, endTime: v })); }}
+                    className="flex-1 px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1">標題</label>
@@ -911,8 +1129,7 @@ const TripDetail = ({ trip, user, onBack }) => {
               </div>
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1">地點</label>
-                <input type="text" value={newEventForm.location} onChange={(e) => { const v = e.target.value; setNewEventForm(prev => ({ ...prev, location: v })); }}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="地點名稱" />
+                <LocationSearch value={newEventForm.location} onChange={(v) => setNewEventForm(prev => ({ ...prev, location: v }))} placeholder="搜尋地點名稱" />
               </div>
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1">類型</label>
@@ -926,9 +1143,9 @@ const TripDetail = ({ trip, user, onBack }) => {
                 <input type="number" min="0" step="1" value={newEventForm.cost} onChange={(e) => { const v = e.target.value; setNewEventForm(prev => ({ ...prev, cost: v })); }}
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0" />
               </div>
-              {groups.length > 0 && (
-                <GroupSelector groups={groups} selectedGroupId={newEventForm.group_id}
-                  onSelectGroup={(groupId) => setNewEventForm(prev => ({ ...prev, group_id: groupId }))} />
+              {members.length > 0 && (
+                <MemberSelector members={members} selectedMemberIds={newEventForm.assignees || []}
+                  onChangeMembers={(ids) => setNewEventForm(prev => ({ ...prev, assignees: ids }))} />
               )}
               <div className="flex gap-3 mt-6">
                 <button onClick={() => setIsAddingEvent(false)} className="flex-1 px-4 py-2 text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg font-semibold">取消</button>

@@ -29,6 +29,7 @@ const App = () => {
         trip={selectedTrip}
         user={user}
         onBack={() => setSelectedTrip(null)}
+        onUpdateTrip={(updates) => setSelectedTrip(prev => ({ ...prev, ...updates }))}
       />
     );
   }

@@ -12,7 +12,13 @@ if (!supabaseUrl || !supabaseAnonKey) {
 // 創建 Supabase 客戶端
 export const supabase = createClient(
   supabaseUrl || 'https://placeholder.supabase.co',
-  supabaseAnonKey || 'placeholder-key'
+  supabaseAnonKey || 'placeholder-key',
+  {
+    auth: {
+      detectSessionInUrl: true,
+      flowType: 'implicit',
+    }
+  }
 );
 
 // 檢查是否正確配置

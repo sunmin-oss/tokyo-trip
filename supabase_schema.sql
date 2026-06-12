@@ -73,6 +73,28 @@ CREATE TABLE IF NOT EXISTS events (
 -- 補 migration：如果 events 已存在但沒有 cost 欄位，補上欄位
 ALTER TABLE events ADD COLUMN IF NOT EXISTS cost NUMERIC DEFAULT 0;
 
+-- 補 migration：如果 events 已存在但沒有 end_time 欄位，補上欄位
+ALTER TABLE events ADD COLUMN IF NOT EXISTS end_time TEXT;
+
+-- 補 migration：如果 groups 已存在但沒有 members 欄位，補上欄位（JSON 陣列存成員名稱）
+ALTER TABLE groups ADD COLUMN IF NOT EXISTS members JSONB DEFAULT '[]';
+
+-- 補 migration：events 加上 assignees 欄位（JSON 陣列存成員 ID）
+ALTER TABLE events ADD COLUMN IF NOT EXISTS assignees JSONB DEFAULT '[]';
+
+-- 8. Trip Members Table (行程成員)
+CREATE TABLE IF NOT EXISTS trip_members (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  trip_id UUID NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  email TEXT,
+  note TEXT,
+  created_at TIMESTAMP DEFAULT now(),
+  updated_at TIMESTAMP DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_trip_members_trip_id ON trip_members(trip_id);
+
 -- 6. Indexes for Performance
 CREATE INDEX IF NOT EXISTS idx_trips_user_id ON trips(user_id);
 CREATE INDEX IF NOT EXISTS idx_groups_trip_id ON groups(trip_id);
@@ -181,4 +203,27 @@ CREATE POLICY "events_update_own" ON events
 CREATE POLICY "events_delete_own" ON events
   FOR DELETE USING (
     EXISTS (SELECT 1 FROM trips WHERE trips.id = events.trip_id AND trips.user_id = auth.uid())
+  );
+
+-- ========== trip_members 表 ==========
+ALTER TABLE trip_members ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "trip_members_select_own" ON trip_members
+  FOR SELECT USING (
+    EXISTS (SELECT 1 FROM trips WHERE trips.id = trip_members.trip_id AND trips.user_id = auth.uid())
+  );
+
+CREATE POLICY "trip_members_insert_own" ON trip_members
+  FOR INSERT WITH CHECK (
+    EXISTS (SELECT 1 FROM trips WHERE trips.id = trip_members.trip_id AND trips.user_id = auth.uid())
+  );
+
+CREATE POLICY "trip_members_update_own" ON trip_members
+  FOR UPDATE USING (
+    EXISTS (SELECT 1 FROM trips WHERE trips.id = trip_members.trip_id AND trips.user_id = auth.uid())
+  );
+
+CREATE POLICY "trip_members_delete_own" ON trip_members
+  FOR DELETE USING (
+    EXISTS (SELECT 1 FROM trips WHERE trips.id = trip_members.trip_id AND trips.user_id = auth.uid())
   );
