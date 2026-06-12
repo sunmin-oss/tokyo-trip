@@ -3,14 +3,13 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "homepage": "https://sunmin-oss.github.io/tokyo-trip/",
+  "homepage": "https://tokyo-trip-exq.pages.dev/",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "predeploy": "npm run build",
-    "deploy": "gh-pages -d dist"
+    "deploy": "npm run build && wrangler pages deploy dist --project-name tokyo-trip --branch main"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
